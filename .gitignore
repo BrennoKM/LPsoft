@@ -1,0 +1,43 @@
+# Build outputs
+**/target/
+**/dist/
+**/.next/
+**/out/
+**/build/
+
+# Dependencies
+**/node_modules/
+
+# IDE
+.idea/
+.vscode/
+*.iml
+.project
+.classpath
+.settings/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+**/logs/
+
+# Environment (commitar apenas .env.example)
+.env
+.env.*
+!.env.example
+
+# Maven
+.mvn/wrapper/maven-wrapper.jar
+
+# Coverage
+**/coverage/
+**/.nyc_output/
+*.lcov
+jacoco.exec
+
+# Misc
+*.swp
+*.bak
