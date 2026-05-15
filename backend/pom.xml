@@ -28,10 +28,6 @@
         <testcontainers.version>1.21.3</testcontainers.version>
     </properties>
 
-    <modules>
-        <module>core</module>
-    </modules>
-
     <dependencyManagement>
         <dependencies>
             <dependency>
@@ -48,6 +44,16 @@
             </dependency>
         </dependencies>
     </dependencyManagement>
+
+    <!--
+        Módulos raiz: core (lib) + app (bootstrap executável).
+        O main vive em 'app' para que o classpath scanning encontre core
+        (e futuras features) sem registro manual.
+    -->
+    <modules>
+        <module>core</module>
+        <module>app</module>
+    </modules>
 
     <profiles>
         <profile>
