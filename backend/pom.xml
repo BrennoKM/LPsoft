@@ -46,9 +46,14 @@
     </dependencyManagement>
 
     <!--
-        Módulos raiz: core (lib) + app (bootstrap executável).
-        O main vive em 'app' para que o classpath scanning encontre core
-        (e futuras features) sem registro manual.
+        Módulos raiz: core (lib) + app (bootstrap executável) sempre presentes.
+        Features entram via profile (e o app declara dependency nelas no mesmo
+        profile). Estes profiles serão GERADOS pelo build.sh a partir de
+        clients/<slug>.yml; por ora mantidos à mão.
+
+        - sem -P            → profile 'dev' (activeByDefault): core + app + todas as features
+        - mvn -P lite       → core + app, sem features (desativa 'dev' por ser -P explícito)
+        - mvn -P enterprise → core + app + todas as features
     -->
     <modules>
         <module>core</module>
@@ -57,15 +62,25 @@
 
     <profiles>
         <profile>
-            <id>lite</id>
+            <id>dev</id>
+            <activation>
+                <activeByDefault>true</activeByDefault>
+            </activation>
             <modules>
-                <module>core</module>
+                <module>features/lembretes</module>
             </modules>
+        </profile>
+        <profile>
+            <id>lite</id>
+            <!-- apenas core; existe para desativar o profile 'dev' -->
+            <properties>
+                <lpsoft.client>lite</lpsoft.client>
+            </properties>
         </profile>
         <profile>
             <id>enterprise</id>
             <modules>
-                <module>core</module>
+                <module>features/lembretes</module>
             </modules>
         </profile>
     </profiles>

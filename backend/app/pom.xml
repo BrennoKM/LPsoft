@@ -24,6 +24,41 @@
         </dependency>
     </dependencies>
 
+    <!--
+        As features entram no classpath do app por profile, espelhando os
+        <module> do parent. Mesmo id de profile mantém parent e app alinhados.
+        (Estes profiles serão gerados pelo build.sh a partir de clients/<slug>.yml.)
+    -->
+    <profiles>
+        <profile>
+            <id>dev</id>
+            <activation>
+                <activeByDefault>true</activeByDefault>
+            </activation>
+            <dependencies>
+                <dependency>
+                    <groupId>io.lpsoft</groupId>
+                    <artifactId>feature-lembretes</artifactId>
+                    <version>${project.version}</version>
+                </dependency>
+            </dependencies>
+        </profile>
+        <profile>
+            <id>lite</id>
+            <!-- apenas core -->
+        </profile>
+        <profile>
+            <id>enterprise</id>
+            <dependencies>
+                <dependency>
+                    <groupId>io.lpsoft</groupId>
+                    <artifactId>feature-lembretes</artifactId>
+                    <version>${project.version}</version>
+                </dependency>
+            </dependencies>
+        </profile>
+    </profiles>
+
     <build>
         <finalName>lpsoft</finalName>
         <plugins>

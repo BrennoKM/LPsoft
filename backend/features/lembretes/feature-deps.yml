@@ -1,0 +1,5 @@
+# Dependências de feature da 'lembretes'.
+# requires:        features que DEVEM estar ativas (build falha se faltar)
+# integrates-with: features que, se presentes, são usadas opcionalmente
+requires: []
+integrates-with: []
