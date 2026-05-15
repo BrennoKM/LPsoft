@@ -85,6 +85,24 @@ services:
     networks:
       - lpsoft-net
 
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      args:
+        CLIENT: enterprise
+        NEXT_PUBLIC_API_URL: http://localhost:8131/api/v1
+    container_name: lpsoft-frontend
+    restart: always
+    depends_on:
+      - backend
+    ports:
+      - "3051:3000"
+    profiles:
+      - prod
+    networks:
+      - lpsoft-net
+
 networks:
   lpsoft-net-dev:
     name: lpsoft-net-dev

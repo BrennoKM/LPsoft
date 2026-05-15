@@ -33,6 +33,8 @@ logging:
 
 lpsoft:
   jwt:
-    secret: ${JWT_SECRET}
+    secret: ${JWT_SECRET:dev-only-insecure-secret-override-in-prod-via-env-min32bytes}
     expiration-hours: ${JWT_EXPIRATION_HOURS:12}
     issuer: lpsoft
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:*}

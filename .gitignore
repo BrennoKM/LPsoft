@@ -4,6 +4,7 @@
 **/.next/
 **/out/
 **/build/
+**/*.tsbuildinfo
 
 # Dependencies
 **/node_modules/
