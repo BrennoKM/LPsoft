@@ -46,6 +46,11 @@
                     <artifactId>feature-categorias</artifactId>
                     <version>${project.version}</version>
                 </dependency>
+                <dependency>
+                    <groupId>io.lpsoft</groupId>
+                    <artifactId>feature-recorrencia</artifactId>
+                    <version>${project.version}</version>
+                </dependency>
             </dependencies>
         </profile>
         <profile>
@@ -63,6 +68,11 @@
                 <dependency>
                     <groupId>io.lpsoft</groupId>
                     <artifactId>feature-categorias</artifactId>
+                    <version>${project.version}</version>
+                </dependency>
+                <dependency>
+                    <groupId>io.lpsoft</groupId>
+                    <artifactId>feature-recorrencia</artifactId>
                     <version>${project.version}</version>
                 </dependency>
             </dependencies>
