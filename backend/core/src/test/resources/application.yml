@@ -1,0 +1,29 @@
+# Config apenas para os testes do core. Datasource vem do Testcontainers
+# (@ServiceConnection / @DynamicPropertySource). JWT/CORS com defaults de teste.
+spring:
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration/core
+    baseline-on-migrate: false
+
+logging:
+  level:
+    root: INFO
+    io.lpsoft: DEBUG
+
+lpsoft:
+  jwt:
+    secret: test-secret-default-core-module-must-be-long-enough-hmac256
+    expiration-hours: 12
+    issuer: lpsoft-test
+  cors:
+    allowed-origins: http://localhost:*
