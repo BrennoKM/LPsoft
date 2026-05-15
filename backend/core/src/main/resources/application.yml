@@ -1,0 +1,38 @@
+spring:
+  application:
+    name: lpsoft
+
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5482/lpsoft}
+    username: ${DATABASE_USER:lpsoft}
+    password: ${DATABASE_PASSWORD:lpsoft}
+
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration/core
+    baseline-on-migrate: false
+
+server:
+  port: ${SERVER_PORT:8080}
+  servlet:
+    context-path: /api/v1
+
+logging:
+  level:
+    root: ${LOG_LEVEL:INFO}
+    io.lpsoft: DEBUG
+
+lpsoft:
+  jwt:
+    secret: ${JWT_SECRET}
+    expiration-hours: ${JWT_EXPIRATION_HOURS:12}
+    issuer: lpsoft
