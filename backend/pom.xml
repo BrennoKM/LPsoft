@@ -68,6 +68,7 @@
             </activation>
             <modules>
                 <module>features/lembretes</module>
+                <module>features/categorias</module>
             </modules>
         </profile>
         <profile>
@@ -81,6 +82,7 @@
             <id>enterprise</id>
             <modules>
                 <module>features/lembretes</module>
+                <module>features/categorias</module>
             </modules>
         </profile>
     </profiles>

@@ -6,7 +6,7 @@ import { LogOut } from 'lucide-react';
 import { AuthGuard } from '@/core/auth/AuthGuard';
 import { clearSession, getUsuario } from '@/core/auth/storage';
 import { Button } from '@/components/ui/button';
-import { clientDisplayName } from '@/lib/feature-flags';
+import { clientDisplayName, hasFeature } from '@/lib/feature-flags';
 
 export default function ProtectedLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -20,9 +20,21 @@ export default function ProtectedLayout({ children }: { children: React.ReactNod
     <AuthGuard>
       <header className="border-b">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
-          <Link href="/eventos" className="text-lg font-semibold">
-            {clientDisplayName}
-          </Link>
+          <div className="flex items-center gap-6">
+            <Link href="/eventos" className="text-lg font-semibold">
+              {clientDisplayName}
+            </Link>
+            <nav className="flex items-center gap-4 text-sm">
+              <Link href="/eventos" className="text-muted-foreground hover:text-foreground">
+                Eventos
+              </Link>
+              {hasFeature('categorias') && (
+                <Link href="/categorias" className="text-muted-foreground hover:text-foreground">
+                  Categorias
+                </Link>
+              )}
+            </nav>
+          </div>
           <UsuarioAtualLogado onSair={sair} />
         </div>
       </header>

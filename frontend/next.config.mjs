@@ -20,25 +20,21 @@ try {
 }
 
 const featureFlags = manifest.features ?? {};
-const emptyFeaturePath = path.resolve(__dirname, './src/core/shared/empty-feature.ts');
 
-const disabledAliases = Object.fromEntries(
-  Object.entries(featureFlags)
-    .filter(([, enabled]) => !enabled)
-    .map(([name]) => [`@/features/${name}`, emptyFeaturePath]),
-);
+// O corte físico de features no frontend (remover o código do bundle de um
+// cliente) é responsabilidade do build.sh, que substitui src/features/<não
+// contratada> antes do `npm build` — espelhando o backend (Maven não compila
+// o módulo) e o WS-GiftCards (build copia só o contratado).
+//
+// Em dev / build sem cliente, todas as features estão presentes; hasFeature()
+// (NEXT_PUBLIC_FEATURES) controla rota/menu em runtime. Alias de bundler NÃO é
+// usado: Turbopack resolve os path-aliases do tsconfig (@/*) com precedência,
+// tornando resolveAlias para @/features/* não confiável.
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: 'standalone',
   reactStrictMode: true,
-  turbopack: {
-    resolveAlias: disabledAliases,
-  },
-  webpack: (config) => {
-    config.resolve.alias = { ...config.resolve.alias, ...disabledAliases };
-    return config;
-  },
   env: {
     NEXT_PUBLIC_CLIENT: manifest.client ?? client,
     NEXT_PUBLIC_DISPLAY_NAME: manifest.displayName ?? client,
