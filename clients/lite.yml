@@ -1,0 +1,21 @@
+client: lite
+displayName: "LPsoft Lite"
+version: 0.1.0
+
+features:
+  lembretes: false
+  categorias: false
+  recorrencia: false
+  analytics: false
+  push-notif: false
+  relatorios-pdf: false
+
+ports:
+  backend: 8132
+  frontend: 3052
+  db: 5484
+
+db:
+  name: lpsoft_lite
+  user: lpsoft
+  password: lpsoft
