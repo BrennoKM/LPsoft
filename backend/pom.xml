@@ -69,6 +69,7 @@
             <modules>
                 <module>features/lembretes</module>
                 <module>features/categorias</module>
+                <module>features/recorrencia</module>
             </modules>
         </profile>
         <profile>
@@ -83,6 +84,7 @@
             <modules>
                 <module>features/lembretes</module>
                 <module>features/categorias</module>
+                <module>features/recorrencia</module>
             </modules>
         </profile>
     </profiles>
