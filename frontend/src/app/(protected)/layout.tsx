@@ -33,6 +33,11 @@ export default function ProtectedLayout({ children }: { children: React.ReactNod
                   Categorias
                 </Link>
               )}
+              {hasFeature('recorrencia') && (
+                <Link href="/recorrencia" className="text-muted-foreground hover:text-foreground">
+                  Recorrência
+                </Link>
+              )}
             </nav>
           </div>
           <UsuarioAtualLogado onSair={sair} />
