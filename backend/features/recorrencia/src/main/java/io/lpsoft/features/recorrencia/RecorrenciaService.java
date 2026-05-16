@@ -8,8 +8,8 @@ import io.lpsoft.features.recorrencia.RecorrenciaExceptions.EventoNaoEncontrado;
 import io.lpsoft.features.recorrencia.RecorrenciaExceptions.RecorrenciaJaExiste;
 import io.lpsoft.features.recorrencia.RecorrenciaExceptions.RecorrenciaNaoEncontrada;
 import io.lpsoft.features.recorrencia.dto.RecorrenciaDtos.CriarRecorrencia;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,7 +19,6 @@ import java.util.List;
 import java.util.UUID;
 
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class RecorrenciaService {
 
@@ -27,6 +26,19 @@ public class RecorrenciaService {
     // Feature consome o core diretamente (feature→core é permitido).
     private final EventoRepository eventos;
     private final EventoService eventoService;
+    /** Quantas ocorrências materializar de imediato ao registrar. */
+    private final int janela;
+
+    public RecorrenciaService(
+            EventoRecorrenciaRepository repo,
+            EventoRepository eventos,
+            EventoService eventoService,
+            @Value("${features.recorrencia.janela:5}") int janela) {
+        this.repo = repo;
+        this.eventos = eventos;
+        this.eventoService = eventoService;
+        this.janela = janela;
+    }
 
     @Transactional
     public EventoRecorrencia registrar(UUID eventoModeloId, CriarRecorrencia req) {
@@ -34,7 +46,15 @@ public class RecorrenciaService {
         if (repo.existsByEventoModeloIdAndAtivoTrue(eventoModeloId)) {
             throw new RecorrenciaJaExiste();
         }
+        // Uma recorrência nova não cria instâncias no passado: pula o
+        // primeiro disparo para a primeira data >= agora (como um calendário
+        // real). Sem isso, modelo antigo geraria eventos históricos e o job
+        // entupiria a agenda repondo o passado.
+        Instant agora = Instant.now();
         Instant primeiro = req.freq().avancar(modelo.getInicio(), req.intervalo());
+        while (primeiro.isBefore(agora)) {
+            primeiro = req.freq().avancar(primeiro, req.intervalo());
+        }
         EventoRecorrencia r = EventoRecorrencia.builder()
                 .id(UUID.randomUUID())
                 .eventoModeloId(eventoModeloId)
@@ -45,6 +65,17 @@ public class RecorrenciaService {
                 .ativo(true)
                 .criadoEm(Instant.now())
                 .build();
+        repo.save(r);
+
+        // Materializa a janela inicial AGORA: marcou "repete" → as próximas
+        // ocorrências aparecem na hora (e lembretes/analytics reagem a cada
+        // uma). O job continua repondo conforme o tempo passa.
+        int criadas = 0;
+        for (int i = 0; i < janela; i++) {
+            if (!tentarGerar(r, modelo)) break;
+            criadas++;
+        }
+        log.info("Recorrência registrada: {} ocorrência(s) materializada(s) na janela", criadas);
         return repo.save(r);
     }
 
@@ -64,10 +95,10 @@ public class RecorrenciaService {
     }
 
     /**
-     * Processa regras vencidas: cria a próxima ocorrência no core (via
-     * EventoService) e avança o disparo. Regra órfã (evento modelo apagado —
-     * consequência da FK informal) é desativada. Retorna quantas ocorrências
-     * foram criadas.
+     * Reposição contínua: processa regras vencidas, criando a próxima
+     * ocorrência no core e avançando o disparo conforme o tempo passa. Regra
+     * órfã (evento modelo apagado — consequência da FK informal) é desativada.
+     * Retorna quantas ocorrências foram criadas.
      */
     @Transactional
     public int processarPendentes() {
@@ -83,20 +114,8 @@ public class RecorrenciaService {
                 r.setAtivo(false);
                 continue;
             }
-
-            Duration duracao = Duration.between(modelo.getInicio(), modelo.getFim());
-            Instant inicio = r.getProximoDisparo();
-            eventoService.criar(
-                    new CriarEventoRequest(modelo.getTitulo(), modelo.getDescricao(), inicio, inicio.plus(duracao)),
-                    modelo.getCriadoPor()
-            );
-            criadas++;
-
-            Instant proximo = r.getFreq().avancar(r.getProximoDisparo(), r.getIntervalo());
-            if (r.getAte() != null && proximo.isAfter(r.getAte())) {
-                r.setAtivo(false);
-            } else {
-                r.setProximoDisparo(proximo);
+            if (tentarGerar(r, modelo)) {
+                criadas++;
             }
         }
         repo.saveAll(pendentes);
@@ -104,5 +123,33 @@ public class RecorrenciaService {
             log.info("Recorrência: {} ocorrência(s) criada(s)", criadas);
         }
         return criadas;
+    }
+
+    /**
+     * Cria UMA ocorrência no disparo atual e avança o ponteiro. Devolve false
+     * (sem criar) se a regra já está inativa ou se o disparo passou de
+     * {@code ate} — desativando a regra nesse caso.
+     */
+    private boolean tentarGerar(EventoRecorrencia r, Evento modelo) {
+        if (!r.isAtivo()) {
+            return false;
+        }
+        if (r.getAte() != null && r.getProximoDisparo().isAfter(r.getAte())) {
+            r.setAtivo(false);
+            return false;
+        }
+        Duration duracao = Duration.between(modelo.getInicio(), modelo.getFim());
+        Instant inicio = r.getProximoDisparo();
+        eventoService.criar(
+                new CriarEventoRequest(modelo.getTitulo(), modelo.getDescricao(), inicio, inicio.plus(duracao)),
+                modelo.getCriadoPor()
+        );
+        Instant proximo = r.getFreq().avancar(r.getProximoDisparo(), r.getIntervalo());
+        if (r.getAte() != null && proximo.isAfter(r.getAte())) {
+            r.setAtivo(false);
+        } else {
+            r.setProximoDisparo(proximo);
+        }
+        return true;
     }
 }

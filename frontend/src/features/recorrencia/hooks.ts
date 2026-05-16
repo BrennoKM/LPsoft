@@ -22,8 +22,11 @@ export function useCriarRecorrencia() {
   return useMutation({
     mutationFn: ({ eventoId, input }: { eventoId: string; input: CriarRecorrenciaInput }) =>
       criarRecorrencia(eventoId, input),
-    onSuccess: (_data, { eventoId }) =>
-      qc.invalidateQueries({ queryKey: recorrenciaKey(eventoId) }),
+    onSuccess: (_data, { eventoId }) => {
+      qc.invalidateQueries({ queryKey: recorrenciaKey(eventoId) });
+      // registrar já materializa a janela → a lista de eventos muda na hora
+      qc.invalidateQueries({ queryKey: ['eventos'] });
+    },
   });
 }
 
