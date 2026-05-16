@@ -7,6 +7,8 @@ import { AuthGuard } from '@/core/auth/AuthGuard';
 import { clearSession, getUsuario } from '@/core/auth/storage';
 import { Button } from '@/components/ui/button';
 import { clientDisplayName, hasFeature } from '@/lib/feature-flags';
+// Composition root: dispara o registro das features contratadas (core→core).
+import '@/core/shared/features';
 
 export default function ProtectedLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
