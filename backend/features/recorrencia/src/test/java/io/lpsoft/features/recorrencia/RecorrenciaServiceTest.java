@@ -24,6 +24,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -85,7 +86,7 @@ class RecorrenciaServiceTest {
 
         assertThat(r.getProximoDisparo()).isEqualTo(Instant.parse("2026-07-15T09:00:00Z"));
         assertThat(r.isAtivo()).isTrue();
-        verify(eventoService, never()).criar(any(), any());
+        verify(eventoService, never()).criar(any(), any(), any());
     }
 
     @Test
@@ -99,7 +100,7 @@ class RecorrenciaServiceTest {
         var r = service(3).registrar(id, new CriarRecorrencia(Frequencia.DIARIA, 1, null));
 
         // primeiro disparo = 07-02; materializa 3 (07-02, 07-03, 07-04)
-        verify(eventoService, times(3)).criar(any(), any());
+        verify(eventoService, times(3)).criar(any(), any(), any());
         assertThat(r.getProximoDisparo()).isEqualTo(Instant.parse("2026-07-05T09:00:00Z"));
         assertThat(r.isAtivo()).isTrue();
     }
@@ -117,12 +118,28 @@ class RecorrenciaServiceTest {
         var r = service(3).registrar(id, new CriarRecorrencia(Frequencia.DIARIA, 1, null));
 
         ArgumentCaptor<CriarEventoRequest> cap = ArgumentCaptor.forClass(CriarEventoRequest.class);
-        verify(eventoService, times(3)).criar(cap.capture(), any());
+        verify(eventoService, times(3)).criar(cap.capture(), any(), any());
         // nenhuma ocorrência no passado distante — todas após "agora"
         assertThat(cap.getAllValues()).allSatisfy(req ->
                 assertThat(req.inicio()).isAfter(limite));
         assertThat(r.getProximoDisparo()).isAfter(limite);
         assertThat(r.isAtivo()).isTrue();
+    }
+
+    @Test
+    void com_ate_materializa_todas_as_ocorrencias_alem_da_janela() {
+        UUID id = UUID.randomUUID();
+        Instant inicio = Instant.parse("2026-07-01T09:00:00Z");
+        Instant ate = Instant.parse("2026-07-10T12:00:00Z");
+        when(eventos.findById(id)).thenReturn(Optional.of(evento(id, inicio, inicio.plusSeconds(1800))));
+        when(repo.existsByEventoModeloIdAndAtivoTrue(id)).thenReturn(false);
+        when(repo.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        // janela=2, mas "até" permite ~9 (07-02..07-10): NÃO cabe na janela
+        var r = service(2).registrar(id, new CriarRecorrencia(Frequencia.DIARIA, 1, ate));
+
+        verify(eventoService, atLeast(5)).criar(any(), any(), any());
+        assertThat(r.isAtivo()).isFalse(); // ultrapassou 'até'
     }
 
     @Test
@@ -137,7 +154,7 @@ class RecorrenciaServiceTest {
         var r = service(5).registrar(id, new CriarRecorrencia(Frequencia.DIARIA, 1, ate));
 
         // 07-02 e 07-03 cabem; 07-04 passa de 'ate' → para e desativa
-        verify(eventoService, times(2)).criar(any(), any());
+        verify(eventoService, times(2)).criar(any(), any(), any());
         assertThat(r.isAtivo()).isFalse();
     }
 
@@ -159,7 +176,7 @@ class RecorrenciaServiceTest {
 
         assertThat(criadas).isEqualTo(1);
         ArgumentCaptor<CriarEventoRequest> cap = ArgumentCaptor.forClass(CriarEventoRequest.class);
-        verify(eventoService).criar(cap.capture(), any());
+        verify(eventoService).criar(cap.capture(), any(), any());
         assertThat(cap.getValue().inicio()).isEqualTo(disparo);
         assertThat(cap.getValue().fim()).isEqualTo(disparo.plus(Duration.ofMinutes(30)));
         assertThat(regra.getProximoDisparo()).isEqualTo(Instant.parse("2026-07-03T09:00:00Z"));
@@ -180,7 +197,7 @@ class RecorrenciaServiceTest {
 
         assertThat(criadas).isZero();
         assertThat(regra.isAtivo()).isFalse();
-        verify(eventoService, never()).criar(any(), any());
+        verify(eventoService, never()).criar(any(), any(), any());
     }
 
     @Test
@@ -199,6 +216,6 @@ class RecorrenciaServiceTest {
         service().processarPendentes();
 
         assertThat(regra.isAtivo()).isFalse();
-        verify(eventoService).criar(any(), any());
+        verify(eventoService).criar(any(), any(), any());
     }
 }

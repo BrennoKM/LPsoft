@@ -7,6 +7,12 @@ import { criarRecorrencia, type Frequencia } from './api';
 const ctrl =
   'h-9 rounded-md border border-input bg-background px-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50';
 
+const UNIDADE: Record<Frequencia, string> = {
+  DIARIA: 'dia(s)',
+  SEMANAL: 'semana(s)',
+  MENSAL: 'mês(es)',
+};
+
 type Estado = { ativar: boolean; freq: Frequencia; intervalo: number; ate: string };
 
 /**
@@ -67,17 +73,20 @@ export function EventoCreateRecorrencia({ onReady }: EventoCreateSlotProps) {
             </select>
           </div>
           <div className="flex flex-col gap-1">
-            <span className="text-xs text-muted-foreground">A cada</span>
-            <input
-              type="number"
-              min={1}
-              className={`${ctrl} w-20`}
-              value={estado.intervalo}
-              onChange={(ev) =>
-                setEstado((s) => ({ ...s, intervalo: Number(ev.target.value) }))
-              }
-              aria-label="Intervalo"
-            />
+            <span className="text-xs text-muted-foreground">Repete a cada</span>
+            <div className="flex items-center gap-1.5">
+              <input
+                type="number"
+                min={1}
+                className={`${ctrl} w-16`}
+                value={estado.intervalo}
+                onChange={(ev) =>
+                  setEstado((s) => ({ ...s, intervalo: Number(ev.target.value) }))
+                }
+                aria-label="Intervalo"
+              />
+              <span className="text-sm text-muted-foreground">{UNIDADE[estado.freq]}</span>
+            </div>
           </div>
           <div className="flex flex-col gap-1">
             <span className="text-xs text-muted-foreground">Até (opcional)</span>

@@ -22,6 +22,9 @@ import java.util.UUID;
 @Slf4j
 public class RecorrenciaService {
 
+    /** Teto de ocorrências materializadas de uma vez quando há "até". */
+    private static final int LIMITE_MATERIALIZACAO = 1000;
+
     private final EventoRecorrenciaRepository repo;
     // Feature consome o core diretamente (feature→core é permitido).
     private final EventoRepository eventos;
@@ -67,11 +70,13 @@ public class RecorrenciaService {
                 .build();
         repo.save(r);
 
-        // Materializa a janela inicial AGORA: marcou "repete" → as próximas
-        // ocorrências aparecem na hora (e lembretes/analytics reagem a cada
-        // uma). O job continua repondo conforme o tempo passa.
+        // Com "até" definido a recorrência é FINITA e conhecida → materializa
+        // todas as ocorrências até a data-fim agora (o usuário espera vê-las).
+        // Sem "até" é infinita → materializa só a janela; o job repõe depois.
+        // Teto de segurança evita explosão (ex.: diária por anos).
+        int limite = req.ate() != null ? LIMITE_MATERIALIZACAO : janela;
         int criadas = 0;
-        for (int i = 0; i < janela; i++) {
+        for (int i = 0; i < limite; i++) {
             if (!tentarGerar(r, modelo)) break;
             criadas++;
         }
@@ -140,9 +145,13 @@ public class RecorrenciaService {
         }
         Duration duracao = Duration.between(modelo.getInicio(), modelo.getFim());
         Instant inicio = r.getProximoDisparo();
+        // Aponta para a RAIZ (colapsa se o modelo já é derivado) — estrela,
+        // nunca encadeia. Features (ex.: categorias) herdam via o contrato.
+        UUID raiz = modelo.getOrigemId() != null ? modelo.getOrigemId() : modelo.getId();
         eventoService.criar(
                 new CriarEventoRequest(modelo.getTitulo(), modelo.getDescricao(), inicio, inicio.plus(duracao)),
-                modelo.getCriadoPor()
+                modelo.getCriadoPor(),
+                raiz
         );
         Instant proximo = r.getFreq().avancar(r.getProximoDisparo(), r.getIntervalo());
         if (r.getAte() != null && proximo.isAfter(r.getAte())) {
