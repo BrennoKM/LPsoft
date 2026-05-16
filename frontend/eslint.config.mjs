@@ -25,6 +25,14 @@ export default defineConfig([
   ...nextVitals,
   ...nextTs,
   guardCoreFromFeatures,
+  {
+    // Exceção única: o composition root É o ponto de montagem (análogo ao
+    // component scan / classpath do Maven). Ele PODE referenciar features;
+    // o build.sh corta as linhas das não contratadas. Nenhum outro arquivo
+    // de core tem essa permissão.
+    files: ['src/core/shared/features.ts'],
+    rules: { 'no-restricted-imports': 'off' },
+  },
   prettier,
   {
     rules: {

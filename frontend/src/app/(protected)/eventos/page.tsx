@@ -5,10 +5,12 @@ import { Plus } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { useEventos } from '@/core/eventos/hooks';
+import { getEventoRowSlots } from '@/core/shared/slots';
 import { extractMessage } from '@/lib/http';
 
 export default function EventosPage() {
   const { data: eventos, isLoading, error } = useEventos();
+  const rowSlots = getEventoRowSlots();
 
   return (
     <div className="flex flex-col gap-4">
@@ -43,6 +45,9 @@ export default function EventosPage() {
                   {format(new Date(e.inicio), "dd/MM/yyyy HH:mm")} →{' '}
                   {format(new Date(e.fim), "dd/MM/yyyy HH:mm")}
                 </p>
+                {rowSlots.map((Slot, i) => (
+                  <Slot key={i} eventoId={e.id} />
+                ))}
               </div>
               <span className="rounded-full bg-secondary px-2 py-0.5 text-xs font-medium">
                 {e.status}
