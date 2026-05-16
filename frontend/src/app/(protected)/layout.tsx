@@ -38,6 +38,11 @@ export default function ProtectedLayout({ children }: { children: React.ReactNod
                   Recorrência
                 </Link>
               )}
+              {hasFeature('analytics') && (
+                <Link href="/analytics" className="text-muted-foreground hover:text-foreground">
+                  Analytics
+                </Link>
+              )}
             </nav>
           </div>
           <UsuarioAtualLogado onSair={sair} />
