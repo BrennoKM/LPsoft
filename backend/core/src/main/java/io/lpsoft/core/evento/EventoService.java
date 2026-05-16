@@ -20,8 +20,18 @@ public class EventoService {
     private final EventoRepository repo;
     private final ApplicationEventPublisher publisher;
 
-    @Transactional
     public EventoResponse criar(CriarEventoRequest req, UUID criadoPor) {
+        return criar(req, criadoPor, null);
+    }
+
+    /**
+     * Cria um evento, opcionalmente derivado de uma raiz ({@code origemId} —
+     * ex.: ocorrência de recorrência). O id da origem viaja no contrato
+     * {@link EventoCriado} para features reagirem (ex.: herdar categorias)
+     * sem que core conheça a feature.
+     */
+    @Transactional
+    public EventoResponse criar(CriarEventoRequest req, UUID criadoPor, UUID origemId) {
         if (!req.fim().isAfter(req.inicio())) {
             throw new EventoInvalidoException("Fim do evento deve ser posterior ao início");
         }
@@ -33,6 +43,7 @@ public class EventoService {
                 .inicio(req.inicio())
                 .fim(req.fim())
                 .criadoPor(criadoPor)
+                .origemId(origemId)
                 .status(EventoStatus.RASCUNHO)
                 .criadoEm(agora)
                 .atualizadoEm(agora)
@@ -40,7 +51,7 @@ public class EventoService {
         Evento salvo = repo.save(e);
         publisher.publishEvent(new EventoCriado(
                 salvo.getId(), salvo.getCriadoPor(), salvo.getTitulo(),
-                salvo.getInicio(), salvo.getFim()
+                salvo.getInicio(), salvo.getFim(), salvo.getOrigemId()
         ));
         return EventoResponse.de(salvo);
     }
