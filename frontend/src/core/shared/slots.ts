@@ -22,3 +22,30 @@ export function registerEventoRowSlot(component: EventoRowSlot): void {
 export function getEventoRowSlots(): readonly EventoRowSlot[] {
   return eventoRowSlots;
 }
+
+// ── Slot do formulário de criação ─────────────────────────────────────────
+// Read-write: o slot renderiza campos próprios, guarda o próprio estado e,
+// DEPOIS que o core cria o evento, recebe o id novo para aplicar-se (ex.:
+// atribuir categoria, registrar recorrência). O core nunca conhece a feature.
+
+/** Aplica o efeito da feature ao evento recém-criado. */
+export type EventoCreateApply = (eventoId: string) => Promise<void>;
+
+export type EventoCreateSlotProps = {
+  /** Chamado UMA vez (no mount): registra como o slot se aplica ao evento. */
+  onReady: (apply: EventoCreateApply) => void;
+};
+
+export type EventoCreateSlot = ComponentType<EventoCreateSlotProps>;
+
+const eventoCreateSlots: EventoCreateSlot[] = [];
+
+export function registerEventoCreateSlot(component: EventoCreateSlot): void {
+  if (!eventoCreateSlots.includes(component)) {
+    eventoCreateSlots.push(component);
+  }
+}
+
+export function getEventoCreateSlots(): readonly EventoCreateSlot[] {
+  return eventoCreateSlots;
+}

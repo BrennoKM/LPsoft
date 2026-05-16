@@ -48,6 +48,9 @@ export default defineConfig([
       // Regras do React Compiler (Next 16) — manter como warning para não bloquear builds da PoC
       'react-hooks/set-state-in-effect': 'warn',
       'react-hooks/exhaustive-deps': 'warn',
+      // falso-positivo conhecido: react-hook-form handleSubmit(onSubmit) onde
+      // onSubmit só lê o ref no submit (handler), não no render
+      'react-hooks/refs': 'warn',
     },
   },
   {

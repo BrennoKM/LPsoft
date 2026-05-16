@@ -2,7 +2,7 @@
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,12 +10,17 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useCriarEvento } from '@/core/eventos/hooks';
 import { novoEventoSchema, type NovoEventoInput } from '@/core/eventos/schemas';
+import {
+  EventoCreateSlots,
+  type EventoCreateSlotsHandle,
+} from '@/core/shared/EventoCreateSlots';
 import { extractMessage } from '@/lib/http';
 
 export default function NovoEventoPage() {
   const router = useRouter();
   const criar = useCriarEvento();
   const [erro, setErro] = useState<string | null>(null);
+  const slotsRef = useRef<EventoCreateSlotsHandle>(null);
 
   const form = useForm<NovoEventoInput>({
     resolver: zodResolver(novoEventoSchema),
@@ -25,7 +30,11 @@ export default function NovoEventoPage() {
   async function onSubmit(values: NovoEventoInput) {
     setErro(null);
     try {
-      await criar.mutateAsync(values);
+      const evento = await criar.mutateAsync(values);
+      // Evento criado: entrega o id às features (best-effort, sem transação
+      // distribuída — mesma filosofia da FK informal). O evento é a fonte da
+      // verdade; extras que falharem podem ser ajustados na tela da feature.
+      await slotsRef.current?.applyAll(evento.id);
       router.push('/eventos');
     } catch (err) {
       setErro(extractMessage(err, 'Falha ao criar evento'));
@@ -63,6 +72,7 @@ export default function NovoEventoPage() {
             )}
           </div>
         </div>
+        <EventoCreateSlots ref={slotsRef} />
         {erro && <p className="text-sm text-destructive">{erro}</p>}
         <div className="flex justify-end gap-2">
           <Button variant="secondary" type="button" onClick={() => router.back()}>

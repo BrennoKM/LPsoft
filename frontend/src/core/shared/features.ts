@@ -9,3 +9,4 @@
  * feature direto.
  */
 import '@/features/categorias/register';
+import '@/features/recorrencia/register';
