@@ -56,6 +56,11 @@
                     <artifactId>feature-analytics</artifactId>
                     <version>${project.version}</version>
                 </dependency>
+                <dependency>
+                    <groupId>io.lpsoft</groupId>
+                    <artifactId>feature-push-notif</artifactId>
+                    <version>${project.version}</version>
+                </dependency>
             </dependencies>
         </profile>
         <profile>
@@ -83,6 +88,11 @@
                 <dependency>
                     <groupId>io.lpsoft</groupId>
                     <artifactId>feature-analytics</artifactId>
+                    <version>${project.version}</version>
+                </dependency>
+                <dependency>
+                    <groupId>io.lpsoft</groupId>
+                    <artifactId>feature-push-notif</artifactId>
                     <version>${project.version}</version>
                 </dependency>
             </dependencies>
