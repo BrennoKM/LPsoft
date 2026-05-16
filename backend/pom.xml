@@ -72,6 +72,7 @@
                 <module>features/recorrencia</module>
                 <module>features/analytics</module>
                 <module>features/push-notif</module>
+                <module>features/relatorios-pdf</module>
             </modules>
         </profile>
         <profile>
@@ -82,6 +83,17 @@
             </properties>
         </profile>
         <profile>
+            <id>plus</id>
+            <!-- tudo menos 'analytics': prova a integração opcional de relatorios-pdf -->
+            <modules>
+                <module>features/lembretes</module>
+                <module>features/categorias</module>
+                <module>features/recorrencia</module>
+                <module>features/push-notif</module>
+                <module>features/relatorios-pdf</module>
+            </modules>
+        </profile>
+        <profile>
             <id>enterprise</id>
             <modules>
                 <module>features/lembretes</module>
@@ -89,6 +101,7 @@
                 <module>features/recorrencia</module>
                 <module>features/analytics</module>
                 <module>features/push-notif</module>
+                <module>features/relatorios-pdf</module>
             </modules>
         </profile>
     </profiles>
