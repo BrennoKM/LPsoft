@@ -71,6 +71,7 @@
                 <module>features/categorias</module>
                 <module>features/recorrencia</module>
                 <module>features/analytics</module>
+                <module>features/push-notif</module>
             </modules>
         </profile>
         <profile>
@@ -87,6 +88,7 @@
                 <module>features/categorias</module>
                 <module>features/recorrencia</module>
                 <module>features/analytics</module>
+                <module>features/push-notif</module>
             </modules>
         </profile>
     </profiles>

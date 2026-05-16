@@ -12,7 +12,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class LembreteListenerTest {
 
-    private final AgendadorLembrete agendador = new AgendadorLembrete();
+    private final AgendadorLembrete agendador = new AgendadorLembrete(event -> {});
     private final LembreteListener listener = new LembreteListener(agendador);
 
     @Test
