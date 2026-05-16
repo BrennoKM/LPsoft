@@ -23,6 +23,25 @@ export function getEventoRowSlots(): readonly EventoRowSlot[] {
   return eventoRowSlots;
 }
 
+// ── Slot de badge (read-only) ─────────────────────────────────────────────
+// Variante só-leitura para lugares compactos (ex.: célula do calendário):
+// renderiza um indicador (etiqueta/cor) do evento, sem editor. Mesmo registry,
+// mesmo princípio — core não conhece a feature; lista vazia → nada.
+
+export type EventoBadgeSlot = ComponentType<{ eventoId: string }>;
+
+const eventoBadgeSlots: EventoBadgeSlot[] = [];
+
+export function registerEventoBadgeSlot(component: EventoBadgeSlot): void {
+  if (!eventoBadgeSlots.includes(component)) {
+    eventoBadgeSlots.push(component);
+  }
+}
+
+export function getEventoBadgeSlots(): readonly EventoBadgeSlot[] {
+  return eventoBadgeSlots;
+}
+
 // ── Slot do formulário de criação ─────────────────────────────────────────
 // Read-write: o slot renderiza campos próprios, guarda o próprio estado e,
 // DEPOIS que o core cria o evento, recebe o id novo para aplicar-se (ex.:
