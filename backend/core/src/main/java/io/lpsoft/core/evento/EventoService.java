@@ -1,5 +1,6 @@
 package io.lpsoft.core.evento;
 
+import io.lpsoft.core.evento.dto.AtualizarEventoRequest;
 import io.lpsoft.core.evento.dto.CriarEventoRequest;
 import io.lpsoft.core.evento.dto.EventoResponse;
 import io.lpsoft.core.shared.events.EventoCriado;
@@ -42,6 +43,32 @@ public class EventoService {
                 salvo.getInicio(), salvo.getFim()
         ));
         return EventoResponse.de(salvo);
+    }
+
+    @Transactional
+    public EventoResponse atualizar(UUID id, AtualizarEventoRequest req, UUID dono) {
+        if (!req.fim().isAfter(req.inicio())) {
+            throw new EventoInvalidoException("Fim do evento deve ser posterior ao início");
+        }
+        Evento e = doDono(id, dono);
+        e.setTitulo(req.titulo());
+        e.setDescricao(req.descricao());
+        e.setInicio(req.inicio());
+        e.setFim(req.fim());
+        e.setAtualizadoEm(Instant.now());
+        return EventoResponse.de(repo.save(e));
+    }
+
+    @Transactional
+    public void excluir(UUID id, UUID dono) {
+        repo.delete(doDono(id, dono));
+    }
+
+    /** Evento do dono ou 404 — não vaza existência de evento de outro usuário. */
+    private Evento doDono(UUID id, UUID dono) {
+        return repo.findById(id)
+                .filter(e -> e.getCriadoPor().equals(dono))
+                .orElseThrow(EventoNaoEncontradoException::new);
     }
 
     @Transactional(readOnly = true)
