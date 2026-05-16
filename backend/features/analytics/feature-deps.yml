@@ -1,0 +1,8 @@
+# Dependências de feature da 'analytics'.
+# requires:        features que DEVEM estar ativas (build falha se faltar)
+# integrates-with: features que, se presentes, são usadas opcionalmente
+#
+# 'analytics' é onividente: só consome o contrato de eventos do core, não
+# depende de nenhuma outra feature.
+requires: []
+integrates-with: []
