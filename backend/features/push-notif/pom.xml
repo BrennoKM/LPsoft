@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.lpsoft</groupId>
+        <artifactId>lpsoft-parent</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+        <relativePath>../../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>feature-push-notif</artifactId>
+    <name>lpsoft-feature-push-notif</name>
+    <description>Feature opcional: envia push ao reagir a lembretes (dependência estrita de 'lembretes')</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.lpsoft</groupId>
+            <artifactId>core</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <!--
+            Dependência ESTRITA: push-notif consome o contrato
+            LembreteAgendadoEvent, de propriedade da feature 'lembretes'.
+            Sem 'lembretes' no build, este módulo não compila — é o que
+            feature-deps.yml (requires: [lembretes]) declara.
+        -->
+        <dependency>
+            <groupId>io.lpsoft</groupId>
+            <artifactId>feature-lembretes</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <optional>true</optional>
+        </dependency>
+
+        <!-- Test -->
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+</project>

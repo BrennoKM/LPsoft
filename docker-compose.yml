@@ -1,0 +1,116 @@
+name: lpsoft
+
+# Templates compartilhados (YAML Anchors)
+x-postgres-common: &postgres-common
+  image: postgres:16-alpine
+  restart: always
+  environment:
+    POSTGRES_USER: lpsoft
+    POSTGRES_PASSWORD: lpsoft
+    POSTGRES_DB: lpsoft
+  healthcheck:
+    test: ["CMD-SHELL", "pg_isready -U lpsoft"]
+    interval: 5s
+    timeout: 5s
+    retries: 5
+
+x-backend-common: &backend-common
+  build:
+    context: ./backend
+    dockerfile: Dockerfile
+  restart: always
+
+services:
+  # ─── Desenvolvimento (dev) ────────────────────────────────────────────────────
+  db-dev:
+    <<: *postgres-common
+    container_name: lpsoft-db-dev
+    ports:
+      - "5482:5432"
+    volumes:
+      - db-data-dev:/var/lib/postgresql/data
+    profiles:
+      - dev
+    networks:
+      - lpsoft-net-dev
+
+  backend-dev:
+    <<: *backend-common
+    container_name: lpsoft-backend-dev
+    env_file: .env.dev
+    environment:
+      - DATABASE_URL=jdbc:postgresql://db-dev:5432/lpsoft
+      - DATABASE_USER=lpsoft
+      - DATABASE_PASSWORD=lpsoft
+      - SERVER_PORT=8080
+    depends_on:
+      db-dev:
+        condition: service_healthy
+    ports:
+      - "8130:8080"
+    profiles:
+      - dev
+    networks:
+      - lpsoft-net-dev
+
+  # ─── Produção (prod) ──────────────────────────────────────────────────────────
+  db:
+    <<: *postgres-common
+    container_name: lpsoft-db
+    ports:
+      - "5483:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    profiles:
+      - prod
+    networks:
+      - lpsoft-net
+
+  backend:
+    <<: *backend-common
+    container_name: lpsoft-backend
+    env_file: .env.prod
+    environment:
+      - DATABASE_URL=jdbc:postgresql://db:5432/lpsoft
+      - DATABASE_USER=lpsoft
+      - DATABASE_PASSWORD=lpsoft
+      - SERVER_PORT=8080
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8131:8080"
+    profiles:
+      - prod
+    networks:
+      - lpsoft-net
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      args:
+        CLIENT: enterprise
+        DISPLAY_NAME: "LPsoft Enterprise"
+        NEXT_PUBLIC_FEATURES: '{"lembretes":true,"categorias":true,"recorrencia":true,"analytics":true,"push-notif":true,"relatorios-pdf":true}'
+        NEXT_PUBLIC_API_URL: http://localhost:8131/api/v1
+    container_name: lpsoft-frontend
+    restart: always
+    depends_on:
+      - backend
+    ports:
+      - "3051:3000"
+    profiles:
+      - prod
+    networks:
+      - lpsoft-net
+
+networks:
+  lpsoft-net-dev:
+    name: lpsoft-net-dev
+  lpsoft-net:
+    name: lpsoft-net
+
+volumes:
+  db-data-dev:
+  db-data:

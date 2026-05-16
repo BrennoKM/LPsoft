@@ -5,9 +5,9 @@ Projeto-exemplo de **Linha de Produto de Software (LPS)** em Java + Next.js. Dem
 ## Stack
 
 - **Backend:** Spring Boot 3.3 + Java 21 + Maven multi-module
-- **Frontend:** Next.js 14 + TypeScript 5 + Tailwind CSS
+- **Frontend:** Next.js 16 + TypeScript 5 + Tailwind CSS
 - **Banco:** PostgreSQL 16
-- **Migrations:** Flyway (multi-location)
+- **Migrations:** Flyway (multi-location, versão por timestamp `YYYYMMDDHHMMSS`)
 - **Container:** Docker + Docker Compose
 - **CI/CD:** GitHub Actions + GHCR
 
@@ -15,32 +15,82 @@ Projeto-exemplo de **Linha de Produto de Software (LPS)** em Java + Next.js. Dem
 
 ```
 LPsoft/
-├── backend/                # Spring Boot multi-module (core + features)
-├── frontend/               # Next.js (em construção)
-├── clients/                # Manifestos por cliente (YAML)
-├── infra/                  # Templates Dockerfile, compose
-├── scripts/                # build.sh
+├── backend/
+│   ├── core/               # biblioteca: domínio, auth, contrato de eventos
+│   ├── app/                # bootstrap executável (tem o main; agrega core + features)
+│   └── features/           # módulos opcionais (ex.: lembretes)
+├── frontend/               # Next.js (core + features espelhando o backend)
+├── clients/                # Manifestos por cliente (YAML) — fonte única de features
+├── scripts/                # build.sh (orquestra mvn + npm por cliente)
 └── .github/workflows/      # CI/CD
 ```
 
-## Como rodar
+> `core` é uma biblioteca, **não** é executável. Quem roda é o `app`, que agrega
+> `core` + as features selecionadas. Por isso todo comando de execução aponta
+> `-pl app -am` (ver abaixo).
 
-Requisitos: Java 21, Docker + Compose.
+## Como rodar (desenvolvimento)
+
+Requisitos: Java 21, Node 20+, Docker + Compose.
 
 ```bash
-cp .env.example .env.dev    # ajustar JWT_SECRET, etc
+# 1. Banco
+docker compose --profile dev up -d db-dev          # Postgres na porta 5482
 
-# Tudo dockerizado (dev)
-docker compose --profile dev up -d --build
+# 2. Backend (na pasta backend/)
+./mvnw -pl app -am spring-boot:run                  # todas as features (default)
 
-# Apenas DB dockerizado + backend local (workflow comum em desenvolvimento)
-docker compose --profile dev up -d db-dev
-cd backend && ./mvnw spring-boot:run -pl core -am
+# 3. Frontend (na pasta frontend/)
+npm run dev                                         # http://localhost:3050
+```
 
-# Produção local (mesmo compose, profile prod)
-cp .env.example .env.prod
+Smoke check: `curl http://localhost:8130/api/v1/health`
+
+### Dois controles independentes: `-P` e `-pl`
+
+Ao rodar/buildar o backend, dois parâmetros do Maven fazem coisas **diferentes**:
+
+| Parâmetro | Controla | Regra |
+|---|---|---|
+| `-P <perfil>` | **Quais features** entram no build | sem `-P` → perfil `dev` = **todas**; `-P lite` = **nenhuma**; `-P enterprise` = todas |
+| `-pl app -am` | **O que executar/empacotar** | `app` é o único módulo com `main`; `-am` builda `core` (+features) antes |
+
+`-P` escolhe *o que tem dentro*. `-pl app -am` escolhe *o que ligar*. Andam juntos no comando mas resolvem problemas distintos:
+
+```bash
+# Rodar como o produto completo (todas as features)
+./mvnw -pl app -am spring-boot:run
+
+# Rodar exatamente como o cliente 'lite' receberá (zero features)
+./mvnw -P lite -pl app -am spring-boot:run
+
+# Rodar como 'enterprise'
+./mvnw -P enterprise -pl app -am spring-boot:run
+```
+
+Frontend, equivalente via variável `CLIENT`:
+
+```bash
+npm run dev                    # default (enterprise)
+CLIENT=lite npm run dev        # simula o cliente lite
+```
+
+> Você **nunca** é obrigado a carregar todas as features: sem `-P` o default
+> `dev` traz todas por conveniência de desenvolvimento; use `-P lite` para
+> trabalhar/testar exatamente o que um cliente enxuto recebe.
+
+### Build empacotado e produção
+
+```bash
+./mvnw -P enterprise -pl app -am clean package      # gera backend/app/target/lpsoft.jar
+java -jar backend/app/target/lpsoft.jar             # roda o fat jar
+
+# Stack completa containerizada
 docker compose --profile prod up -d --build
 ```
+
+> `mvn clean` é importante ao trocar de perfil: artefato de um build anterior
+> pode contaminar o seguinte.
 
 ### Portas
 
@@ -50,31 +100,25 @@ docker compose --profile prod up -d --build
 | Backend | 8130 | 8131 |
 | Frontend | 3050 | 3051 |
 
-Smoke check após subir:
-
-```bash
-curl http://localhost:8130/api/v1/health     # dev
-curl http://localhost:8131/api/v1/health     # prod
-```
-
 ## Domínio
 
 Mini-agenda compartilhada — substrato simples para demonstrar os mecanismos de LPS sem distrações de regra de negócio.
 
-- Entidades: `Usuario`, `Evento`, `Convite`
-- Fluxos: cadastro, criar evento, publicar, convidar, aceitar/recusar, cancelar
+- Entidades atuais: `Usuario`, `Evento`
+- Fluxos atuais: cadastro, login (JWT), criar evento, listar eventos
 
 ## Features
 
-| Feature | Padrão demonstrado |
-|---|---|
-| `lembretes` | Listener puro de evento (sem migration, sem rota) |
-| `categorias` | Feature autônoma com dados e rotas próprios |
-| `recorrencia` | Estende entidade core via FK |
-| `analytics` | Onividente — escuta tudo, agrega tudo |
-| `push-notif` | Dependência estrita em `lembretes` |
-| `relatorios-pdf` | Dependência opcional em `analytics` |
+| Feature | Padrão demonstrado | Estado |
+|---|---|---|
+| `lembretes` | Listener puro de evento (sem migration, sem rota) | ✅ implementada |
+| `categorias` | Feature autônoma com dados e rotas próprios | planejada |
+| `recorrencia` | Estende entidade core via FK | planejada |
+| `analytics` | Onividente — escuta tudo, agrega tudo | planejada |
+| `push-notif` | Dependência estrita em `lembretes` | planejada |
+| `relatorios-pdf` | Dependência opcional em `analytics` | planejada |
 
 ## Status
 
-Em desenvolvimento — esqueleto inicial.
+Em desenvolvimento. Funcionando: core (auth + eventos), frontend (login/eventos),
+primeira feature opcional (`lembretes`) com seleção por perfil Maven.

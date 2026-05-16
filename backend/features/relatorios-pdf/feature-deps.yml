@@ -1,0 +1,11 @@
+# Dependências de feature da 'relatorios-pdf'.
+# requires:        features que DEVEM estar ativas (build falha se faltar)
+# integrates-with: features que, se presentes, são usadas opcionalmente
+#
+# 'relatorios-pdf' integra 'analytics' de forma OPCIONAL via o SPI
+# SecaoRelatorio (core). Sem 'analytics' o relatório sai só com o core;
+# com 'analytics', ganha a seção de agregados. Sem dependency Maven entre
+# as features.
+requires: []
+integrates-with:
+  - analytics
