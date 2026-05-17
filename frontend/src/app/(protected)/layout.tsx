@@ -50,6 +50,14 @@ export default function ProtectedLayout({ children }: { children: React.ReactNod
                   Notificações
                 </Link>
               )}
+              {hasFeature('relatorios-pdf') && (
+                <Link
+                  href="/relatorios-pdf"
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  Relatórios
+                </Link>
+              )}
             </nav>
           </div>
           <UsuarioAtualLogado onSair={sair} />
