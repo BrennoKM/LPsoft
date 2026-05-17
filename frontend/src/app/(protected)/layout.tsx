@@ -45,6 +45,24 @@ export default function ProtectedLayout({ children }: { children: React.ReactNod
                   Analytics
                 </Link>
               )}
+              {hasFeature('lembretes') && (
+                <Link href="/lembretes" className="text-muted-foreground hover:text-foreground">
+                  Lembretes
+                </Link>
+              )}
+              {hasFeature('notificacao') && (
+                <Link href="/notificacao" className="text-muted-foreground hover:text-foreground">
+                  Notificações
+                </Link>
+              )}
+              {hasFeature('relatorios-pdf') && (
+                <Link
+                  href="/relatorios-pdf"
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  Relatórios
+                </Link>
+              )}
             </nav>
           </div>
           <UsuarioAtualLogado onSair={sair} />

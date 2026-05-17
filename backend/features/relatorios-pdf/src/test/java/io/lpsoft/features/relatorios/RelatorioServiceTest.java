@@ -57,4 +57,35 @@ class RelatorioServiceTest {
         assertThat(txt).contains("== Analytics ==");
         assertThat(txt).contains("2026-08-01: 2");
     }
+
+    @Test
+    void previa_sem_secoes_tem_so_o_core() {
+        when(eventos.count()).thenReturn(7L);
+        var service = new RelatorioService(eventos, List.of());
+
+        List<String> linhas = service.linhasRelatorio();
+
+        assertThat(linhas).contains("Total de eventos cadastrados: 7");
+        assertThat(linhas).noneMatch(l -> l.contains("== Analytics =="));
+    }
+
+    @Test
+    void previa_com_analytics_inclui_a_secao() {
+        when(eventos.count()).thenReturn(3L);
+        SecaoRelatorio analytics = new SecaoRelatorio() {
+            @Override
+            public String titulo() {
+                return "Analytics";
+            }
+
+            @Override
+            public List<String> linhas() {
+                return List.of("Total de eventos contabilizados: 3");
+            }
+        };
+        var service = new RelatorioService(eventos, List.of(analytics));
+
+        assertThat(service.linhasRelatorio())
+                .contains("== Analytics ==", "Total de eventos contabilizados: 3");
+    }
 }

@@ -69,9 +69,10 @@
             <modules>
                 <module>features/lembretes</module>
                 <module>features/categorias</module>
+                <module>features/resumo-por-categoria</module>
                 <module>features/recorrencia</module>
                 <module>features/analytics</module>
-                <module>features/push-notif</module>
+                <module>features/notificacao</module>
                 <module>features/relatorios-pdf</module>
             </modules>
         </profile>
@@ -88,8 +89,9 @@
             <modules>
                 <module>features/lembretes</module>
                 <module>features/categorias</module>
+                <module>features/resumo-por-categoria</module>
                 <module>features/recorrencia</module>
-                <module>features/push-notif</module>
+                <module>features/notificacao</module>
                 <module>features/relatorios-pdf</module>
             </modules>
         </profile>
@@ -98,9 +100,10 @@
             <modules>
                 <module>features/lembretes</module>
                 <module>features/categorias</module>
+                <module>features/resumo-por-categoria</module>
                 <module>features/recorrencia</module>
                 <module>features/analytics</module>
-                <module>features/push-notif</module>
+                <module>features/notificacao</module>
                 <module>features/relatorios-pdf</module>
             </modules>
         </profile>

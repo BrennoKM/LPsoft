@@ -13,7 +13,7 @@
 
     <artifactId>feature-lembretes</artifactId>
     <name>lpsoft-feature-lembretes</name>
-    <description>Feature opcional: agenda lembretes ao escutar eventos do core</description>
+    <description>Feature opcional: política de antecedência de lembretes; reage a eventos do core e publica LembreteProgramado</description>
 
     <dependencies>
         <!-- Depende do core (consome o contrato shared/events). Core NUNCA depende de feature. -->
@@ -26,6 +26,12 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-autoconfigure</artifactId>
+        </dependency>
+
+        <!-- Controller da política/lista de lembretes (tela visível da feature) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
         </dependency>
 
         <dependency>

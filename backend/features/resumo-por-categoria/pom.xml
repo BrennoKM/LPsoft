@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.lpsoft</groupId>
+        <artifactId>lpsoft-parent</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+        <relativePath>../../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>feature-resumo-por-categoria</artifactId>
+    <name>lpsoft-feature-resumo-por-categoria</name>
+    <description>Feature opcional: resumo de eventos por categoria. Dependência ESTRITA de 'categorias' (importa seus tipos)</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.lpsoft</groupId>
+            <artifactId>core</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <!--
+            Dependência ESTRITA: 'resumo-por-categoria' importa Categoria e
+            EventoCategoriaRepository, de propriedade da feature 'categorias'.
+            Sem 'categorias' no build este módulo não compila — é o que
+            feature-deps.yml (requires: [categorias]) declara, e o que a guarda
+            do build.sh recusa (exit 1) se um cliente contratar sem a dependência.
+        -->
+        <dependency>
+            <groupId>io.lpsoft</groupId>
+            <artifactId>feature-categorias</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-jpa</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <optional>true</optional>
+        </dependency>
+
+        <!-- Test -->
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.mockito</groupId>
+            <artifactId>mockito-junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+</project>

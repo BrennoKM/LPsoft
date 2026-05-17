@@ -1,8 +1,9 @@
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { format } from 'date-fns';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { Suspense, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,22 +11,53 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useCriarEvento } from '@/core/eventos/hooks';
 import { novoEventoSchema, type NovoEventoInput } from '@/core/eventos/schemas';
+import {
+  EventoCreateSlots,
+  type EventoCreateSlotsHandle,
+} from '@/core/shared/EventoCreateSlots';
 import { extractMessage } from '@/lib/http';
 
 export default function NovoEventoPage() {
+  // useSearchParams exige fronteira de Suspense no build (next build).
+  return (
+    <Suspense fallback={null}>
+      <NovoEventoForm />
+    </Suspense>
+  );
+}
+
+function NovoEventoForm() {
   const router = useRouter();
   const criar = useCriarEvento();
   const [erro, setErro] = useState<string | null>(null);
+  const slotsRef = useRef<EventoCreateSlotsHandle>(null);
+
+  // Vindo do calendário (clique num dia): /eventos/novo?data=YYYY-MM-DD.
+  const params = useSearchParams();
+  const [defaults] = useState<NovoEventoInput>(() => {
+    const base = { titulo: '', descricao: '', inicio: '', fim: '' };
+    const data = params.get('data');
+    if (!data) return base;
+    const hora = params.get('hora') || '09:00';
+    const ini = new Date(`${data}T${hora}`);
+    const fim = new Date(ini.getTime() + 60 * 60 * 1000);
+    const fmt = (d: Date) => format(d, "yyyy-MM-dd'T'HH:mm");
+    return { ...base, inicio: fmt(ini), fim: fmt(fim) };
+  });
 
   const form = useForm<NovoEventoInput>({
     resolver: zodResolver(novoEventoSchema),
-    defaultValues: { titulo: '', descricao: '', inicio: '', fim: '' },
+    defaultValues: defaults,
   });
 
   async function onSubmit(values: NovoEventoInput) {
     setErro(null);
     try {
-      await criar.mutateAsync(values);
+      const evento = await criar.mutateAsync(values);
+      // Evento criado: entrega o id às features (best-effort, sem transação
+      // distribuída — mesma filosofia da FK informal). O evento é a fonte da
+      // verdade; extras que falharem podem ser ajustados na tela da feature.
+      await slotsRef.current?.applyAll(evento.id);
       router.push('/eventos');
     } catch (err) {
       setErro(extractMessage(err, 'Falha ao criar evento'));
@@ -63,6 +95,7 @@ export default function NovoEventoPage() {
             )}
           </div>
         </div>
+        <EventoCreateSlots ref={slotsRef} />
         {erro && <p className="text-sm text-destructive">{erro}</p>}
         <div className="flex justify-end gap-2">
           <Button variant="secondary" type="button" onClick={() => router.back()}>

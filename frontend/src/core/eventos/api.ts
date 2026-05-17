@@ -19,13 +19,28 @@ export async function listarEventos(): Promise<EventoResponse[]> {
   return data;
 }
 
-export async function criarEvento(input: NovoEventoInput): Promise<EventoResponse> {
-  const payload = {
+function payloadDe(input: NovoEventoInput) {
+  return {
     titulo: input.titulo,
     descricao: input.descricao || undefined,
     inicio: new Date(input.inicio).toISOString(),
     fim: new Date(input.fim).toISOString(),
   };
-  const { data } = await api.post<EventoResponse>('/eventos', payload);
+}
+
+export async function criarEvento(input: NovoEventoInput): Promise<EventoResponse> {
+  const { data } = await api.post<EventoResponse>('/eventos', payloadDe(input));
   return data;
+}
+
+export async function atualizarEvento(
+  id: string,
+  input: NovoEventoInput,
+): Promise<EventoResponse> {
+  const { data } = await api.patch<EventoResponse>(`/eventos/${id}`, payloadDe(input));
+  return data;
+}
+
+export async function excluirEvento(id: string): Promise<void> {
+  await api.delete(`/eventos/${id}`);
 }

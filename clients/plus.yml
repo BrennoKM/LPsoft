@@ -5,9 +5,10 @@ version: 0.1.0
 features:
   lembretes: true
   categorias: true
+  resumo-por-categoria: true
   recorrencia: true
   analytics: false
-  push-notif: true
+  notificacao: true
   relatorios-pdf: true
 
 ports:

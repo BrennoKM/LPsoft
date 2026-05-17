@@ -42,6 +42,10 @@ public class Evento {
     @Column(name = "criado_por", nullable = false)
     private UUID criadoPor;
 
+    /** Raiz da qual este evento deriva (ex.: ocorrência → modelo). Null se criado direto. */
+    @Column(name = "origem_id")
+    private UUID origemId;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private EventoStatus status;
