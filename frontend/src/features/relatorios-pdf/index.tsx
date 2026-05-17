@@ -6,11 +6,13 @@ import { Button } from '@/components/ui/button';
 import { hasFeature } from '@/lib/feature-flags';
 import { extractMessage } from '@/lib/http';
 import { baixarRelatorioEventos } from './api';
+import { usePreviaRelatorio } from './hooks';
 
 export function RelatoriosPage() {
   const [baixando, setBaixando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const comAnalytics = hasFeature('analytics');
+  const { data: previa, isLoading, error } = usePreviaRelatorio();
 
   async function baixar() {
     setErro(null);
@@ -64,6 +66,23 @@ export function RelatoriosPage() {
         </p>
 
         {erro && <p className="text-sm text-destructive">{erro}</p>}
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <h2 className="text-sm font-medium text-muted-foreground">
+          Prévia do conteúdo
+        </h2>
+        {isLoading && <p className="text-sm text-muted-foreground">Carregando…</p>}
+        {error && (
+          <p className="text-sm text-destructive">
+            {extractMessage(error, 'Falha ao carregar a prévia')}
+          </p>
+        )}
+        {previa && (
+          <pre className="overflow-x-auto rounded-md border bg-muted/40 p-4 text-xs leading-relaxed text-foreground">
+            {previa.join('\n')}
+          </pre>
+        )}
       </div>
     </div>
   );
