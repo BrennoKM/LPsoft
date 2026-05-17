@@ -40,6 +40,7 @@ LPsoft/
 │   └── features/
 │       ├── lembretes/        # política de antecedência (tela própria) + contrato do core
 │       ├── categorias/       # feature autônoma (dados + rotas + UI + badge)
+│       ├── resumo-por-categoria/  # depende ESTRITAMENTE de categorias (requires)
 │       ├── recorrencia/      # estende o core gerando eventos
 │       ├── analytics/        # onividente — escuta tudo, agrega
 │       ├── notificacao/      # canal de aviso (emergente via contrato do core)
@@ -90,6 +91,7 @@ flowchart LR
   subgraph features["features (só as contratadas)"]
     F1[lembretes]
     F2[categorias]
+    F7[resumo-por-categoria]
     F3[recorrencia]
     F4[analytics]
     F5[notificacao]
@@ -145,6 +147,7 @@ Cada feature existe para provar um padrão de composição:
 |---|---|---|---|
 | `lembretes` | **Política visível**: reage a `EventoCriado` e decide *quando* avisar (antecedência configurável); publica o contrato do core `LembreteProgramado` | listener + política + REST | página (política + lista de programados) |
 | `categorias` | **Autônoma**: dados, migration, rotas e UI próprios; referencia `evento` por FK informal | tabelas + REST | página + slots (linha, criação, badge no calendário) |
+| `resumo-por-categoria` | **Dependência estrita**: importa os tipos de `categorias` e conta eventos por categoria — não compila sem ela | `requires: [categorias]` | painel injetado em `/categorias` via slot do core (não tem rota própria) |
 | `recorrencia` | **Estende o core**: gera novos eventos a partir de um modelo; janela + "até"; job de reposição | regra + `EventoService.criar` | página + slot de criação |
 | `analytics` | **Onividente**: escuta o contrato do core e agrega; implementa o SPI de relatório | agregação + endpoint | dashboard |
 | `notificacao` | **Canal emergente**: reage ao contrato do core `LembreteProgramado` (zero dep entre features); dispatcher agendado marca como enviada na hora | listener + dispatcher (`@Scheduled`) | página (programada → enviada) |
@@ -164,6 +167,7 @@ flowchart TD
   CORE -->|emergente| CAT["categorias (herança via origemId)"]
   LEM -->|publica LembreteProgramado| CORE
   CORE -->|emergente| NOTIF[notificacao]
+  CAT ==>|estrita: requires| RES[resumo-por-categoria]
   ANA -.opcional: SPI do core.-> PDF[relatorios-pdf]
 ```
 
@@ -177,10 +181,10 @@ A própria `lembretes` publica outro contrato do core (`LembreteProgramado`);
 **2. Estrita — `requires`.** A feature **não compila** sem a dependência:
 dependência Maven no módulo da outra + import do contrato dela.
 `feature-deps.yml` declara `requires: [...]`. O `build.sh` **falha (exit 1)**
-se um cliente contratar a feature sem a dependência. *(Hoje nenhuma feature do
-catálogo declara `requires` — o par antes usado foi reavaliado como acoplamento
-artificial e desfeito; um exemplo concreto e tangível está no roadmap. O
-mecanismo `requires` + guarda do `build.sh` permanece e é o que importa aqui.)*
+se um cliente contratar a feature sem a dependência. Exemplo real:
+`resumo-por-categoria` importa os tipos de `categorias` (`Categoria`,
+`EventoCategoriaRepository`) e declara `requires: [categorias]` — um resumo
+*por categoria* não existe sem o conceito de categoria.
 
 **3. Opcional — `integrates-with`.** Zero acoplamento Maven entre as features.
 A integração passa por um **ponto de extensão do core**
@@ -265,12 +269,14 @@ Princípios:
 - Containers nomeados `lpsoft-<servico>-<cliente>` (rodam lado a lado).
 - `mvn clean` por cliente (artefato stale contamina).
 
-A guarda de dependência estrita (forma — sem par concreto no catálogo hoje;
-será reintroduzida com o exemplo do roadmap). Quando uma feature declara
-`requires: [X]` e o cliente não contrata `X`, `build.sh` aborta antes de gerar:
+Provar a guarda de dependência estrita — um cliente que contrate
+`resumo-por-categoria` sem `categorias` é recusado antes de qualquer build:
 
 ```text
-✗ feature '<feature>' requer '<X>', que não está contratada   → exit 1
+$ scripts/build.sh <cliente-invalido>
+>> Validando dependências de '<cliente-invalido>' (features: resumo-por-categoria)
+  ✗ feature 'resumo-por-categoria' requer 'categorias', que não está contratada
+ERRO: grafo de dependências inválido para '<cliente-invalido>'   → exit 1
 ```
 
 Provar a degradação da opcional:
@@ -284,5 +290,3 @@ scripts/build.sh plus         # mesmo PDF, sem a seção — sem erro
 
 - CI/CD: GitHub Actions (build por matriz de clientes) + publicação no GHCR.
 - Testes E2E (Playwright) cobrindo os fluxos por cliente.
-- Exemplo concreto e tangível de dependência estrita (`requires`) entre
-  features, reintroduzindo a guarda do `build.sh` com um par natural.

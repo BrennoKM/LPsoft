@@ -9,4 +9,5 @@
  * feature direto.
  */
 import '@/features/categorias/register';
+import '@/features/resumo-por-categoria/register';
 import '@/features/recorrencia/register';

@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { extractMessage } from '@/lib/http';
+import { getCategoriaPanelSlots } from '@/core/shared/slots';
 import { useCategorias, useCriarCategoria, useDeletarCategoria } from './hooks';
 
 const schema = z.object({
@@ -101,6 +102,10 @@ export function CategoriasPage() {
           ))}
         </ul>
       )}
+
+      {getCategoriaPanelSlots().map((Panel, i) => (
+        <Panel key={i} />
+      ))}
     </div>
   );
 }
