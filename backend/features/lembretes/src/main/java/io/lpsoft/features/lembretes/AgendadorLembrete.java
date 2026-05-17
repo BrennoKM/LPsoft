@@ -1,5 +1,6 @@
 package io.lpsoft.features.lembretes;
 
+import io.lpsoft.core.shared.events.LembreteProgramado;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
@@ -11,9 +12,10 @@ import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
- * Registra lembretes em memória e simula o envio (log). Publica
- * {@link LembreteAgendadoEvent} para features que reagem ao agendamento.
- * Numa implementação real, aqui entraria fila/SMTP/push.
+ * Registra os lembretes programados em memória (a lista exibida na tela) e
+ * publica {@link LembreteProgramado} — contrato do core — para que canais de
+ * aviso (toast/in-app, e-mail, …) reajam sem conhecer esta feature.
+ * Numa implementação real, aqui entraria fila/scheduler.
  */
 @Component
 @Slf4j
@@ -28,8 +30,8 @@ public class AgendadorLembrete {
     public void agendar(UUID eventoId, String titulo, Instant quando) {
         LembreteAgendado lembrete = new LembreteAgendado(eventoId, titulo, quando);
         agendados.add(lembrete);
-        log.info("Lembrete agendado para evento '{}' ({}) em {}", titulo, eventoId, quando);
-        publisher.publishEvent(new LembreteAgendadoEvent(eventoId, titulo, quando));
+        log.info("Lembrete programado para evento '{}' ({}) em {}", titulo, eventoId, quando);
+        publisher.publishEvent(new LembreteProgramado(eventoId, titulo, quando));
     }
 
     public List<LembreteAgendado> lembretesAgendados() {

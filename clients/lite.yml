@@ -7,7 +7,7 @@ features:
   categorias: false
   recorrencia: false
   analytics: false
-  push-notif: false
+  notificacao: false
   relatorios-pdf: false
 
 ports:

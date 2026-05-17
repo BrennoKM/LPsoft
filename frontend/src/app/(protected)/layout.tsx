@@ -45,8 +45,13 @@ export default function ProtectedLayout({ children }: { children: React.ReactNod
                   Analytics
                 </Link>
               )}
-              {hasFeature('push-notif') && (
-                <Link href="/push-notif" className="text-muted-foreground hover:text-foreground">
+              {hasFeature('lembretes') && (
+                <Link href="/lembretes" className="text-muted-foreground hover:text-foreground">
+                  Lembretes
+                </Link>
+              )}
+              {hasFeature('notificacao') && (
+                <Link href="/notificacao" className="text-muted-foreground hover:text-foreground">
                   Notificações
                 </Link>
               )}

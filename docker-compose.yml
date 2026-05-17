@@ -92,7 +92,7 @@ services:
       args:
         CLIENT: enterprise
         DISPLAY_NAME: "LPsoft Enterprise"
-        NEXT_PUBLIC_FEATURES: '{"lembretes":true,"categorias":true,"recorrencia":true,"analytics":true,"push-notif":true,"relatorios-pdf":true}'
+        NEXT_PUBLIC_FEATURES: '{"lembretes":true,"categorias":true,"recorrencia":true,"analytics":true,"notificacao":true,"relatorios-pdf":true}'
         NEXT_PUBLIC_API_URL: http://localhost:8131/api/v1
     container_name: lpsoft-frontend
     restart: always

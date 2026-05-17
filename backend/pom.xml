@@ -71,7 +71,7 @@
                 <module>features/categorias</module>
                 <module>features/recorrencia</module>
                 <module>features/analytics</module>
-                <module>features/push-notif</module>
+                <module>features/notificacao</module>
                 <module>features/relatorios-pdf</module>
             </modules>
         </profile>
@@ -89,7 +89,7 @@
                 <module>features/lembretes</module>
                 <module>features/categorias</module>
                 <module>features/recorrencia</module>
-                <module>features/push-notif</module>
+                <module>features/notificacao</module>
                 <module>features/relatorios-pdf</module>
             </modules>
         </profile>
@@ -100,7 +100,7 @@
                 <module>features/categorias</module>
                 <module>features/recorrencia</module>
                 <module>features/analytics</module>
-                <module>features/push-notif</module>
+                <module>features/notificacao</module>
                 <module>features/relatorios-pdf</module>
             </modules>
         </profile>

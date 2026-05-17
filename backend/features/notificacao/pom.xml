@@ -11,24 +11,22 @@
         <relativePath>../../pom.xml</relativePath>
     </parent>
 
-    <artifactId>feature-lembretes</artifactId>
-    <name>lpsoft-feature-lembretes</name>
-    <description>Feature opcional: política de antecedência de lembretes; reage a eventos do core e publica LembreteProgramado</description>
+    <artifactId>feature-notificacao</artifactId>
+    <name>lpsoft-feature-notificacao</name>
+    <description>Feature opcional: canal de aviso toast/in-app; reage ao contrato do core LembreteProgramado (relação emergente, sem dependência estrita)</description>
 
     <dependencies>
-        <!-- Depende do core (consome o contrato shared/events). Core NUNCA depende de feature. -->
+        <!--
+            Depende SÓ do core. Reage a LembreteProgramado (contrato do core),
+            não a um tipo da feature 'lembretes' — por isso NÃO há dependência
+            estrita: é um canal irmão, relação emergente via contrato do core.
+        -->
         <dependency>
             <groupId>io.lpsoft</groupId>
             <artifactId>core</artifactId>
             <version>${project.version}</version>
         </dependency>
 
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-autoconfigure</artifactId>
-        </dependency>
-
-        <!-- Controller da política/lista de lembretes (tela visível da feature) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
@@ -44,11 +42,6 @@
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.mockito</groupId>
-            <artifactId>mockito-junit-jupiter</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>

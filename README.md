@@ -2,18 +2,9 @@
 
 Projeto-exemplo de **Linha de Produto de Software (LPS)** em Java + Next.js.
 
-Uma **única base de código** entrega produtos diferentes por cliente — cada
-cliente recebe só as funcionalidades que contratou, com um pacote de entrega
-próprio — usando apenas mecanismos **nativos do stack**: Maven multi-module,
-classpath scanning do Spring, Flyway multi-location, um registry de slots no
-frontend e um script de empacotamento. Sem framework de "plugins", sem feature
-flags espalhadas pelo código, sem rede entre módulos.
+Uma **única base de código** entrega produtos diferentes por cliente — cada cliente recebe só as funcionalidades que contratou, com um pacote de entrega próprio — usando apenas mecanismos **nativos do stack**: Maven multi-module, classpath scanning do Spring, Flyway multi-location, um registry de slots no frontend e um script de empacotamento. Sem framework de "plugins", sem feature flags espalhadas pelo código, sem rede entre módulos.
 
-> A tese: dá para ter módulos isolados, dependências explícitas entre eles e
-> corte por cliente — os ganhos que se busca em microserviços — resolvidos em
-> **tempo de montagem**, dentro de um monólito modular. O `build.sh` *prova*
-> isso: falha quando uma dependência obrigatória não é contratada e degrada
-> graciosamente quando uma opcional falta.
+> A tese: dá para ter módulos isolados, dependências explícitas entre eles e corte por cliente — os ganhos que se busca em microserviços — resolvidos em **tempo de montagem**, dentro de um monólito modular. O `build.sh` *prova* isso: falha quando uma dependência obrigatória não é contratada e degrada graciosamente quando uma opcional falta.
 
 ## Stack
 
@@ -47,11 +38,11 @@ LPsoft/
 │   ├── core/                 # biblioteca: domínio, auth, contratos, SPI — NÃO executável
 │   ├── app/                  # bootstrap (tem o main; agrega core + features por perfil)
 │   └── features/
-│       ├── lembretes/        # listener / política de aviso
+│       ├── lembretes/        # política de antecedência (tela própria) + contrato do core
 │       ├── categorias/       # feature autônoma (dados + rotas + UI + badge)
 │       ├── recorrencia/      # estende o core gerando eventos
 │       ├── analytics/        # onividente — escuta tudo, agrega
-│       ├── push-notif/       # canal de notificação (dependência estrita)
+│       ├── notificacao/      # canal de aviso (emergente via contrato do core)
 │       └── relatorios-pdf/   # PDF sem libs (dependência opcional via SPI)
 ├── frontend/
 │   └── src/
@@ -78,12 +69,7 @@ Multi-module Maven. **Dois eixos independentes** no comando:
 
 `-P` escolhe *o que tem dentro*; `-pl app -am` escolhe *o que ligar*.
 
-> **Como o perfil se liga ao manifesto:** hoje o perfil Maven
-> (`backend/pom.xml` + `backend/app/pom.xml`) e o `clients/<slug>.yml` são
-> casados **por convenção (mesmo nome) e mantidos em sincronia manualmente** —
-> o perfil não é gerado. O `build.sh` consome o manifesto para o corte do
-> frontend e a validação do grafo de dependências; para o backend ele apenas
-> invoca `mvn -P <slug>`. Gerar os perfis a partir do manifesto é roadmap.
+> **Como o perfil se liga ao manifesto:** hoje o perfil Maven (`backend/pom.xml` + `backend/app/pom.xml`) e o `clients/<slug>.yml` são casados **por convenção (mesmo nome) e mantidos em sincronia manualmente** — o perfil não é gerado. O `build.sh` consome o manifesto para o corte do frontend e a validação do grafo de dependências; para o backend ele apenas invoca `mvn -P <slug>`. Gerar os perfis a partir do manifesto é roadmap.
 
 **Descoberta automática (sem registro manual):**
 
@@ -106,7 +92,7 @@ flowchart LR
     F2[categorias]
     F3[recorrencia]
     F4[analytics]
-    F5[push-notif]
+    F5[notificacao]
     F6[relatorios-pdf]
   end
   features --> APP
@@ -157,11 +143,11 @@ Cada feature existe para provar um padrão de composição:
 
 | Feature | Padrão | Backend | Frontend |
 |---|---|---|---|
-| `lembretes` | Reage a um fato do core; decide *quando* avisar (antecedência). Footprint mínimo. | listener de `EventoCriado`, publica contrato próprio | — |
+| `lembretes` | **Política visível**: reage a `EventoCriado` e decide *quando* avisar (antecedência configurável); publica o contrato do core `LembreteProgramado` | listener + política + REST | página (política + lista de programados) |
 | `categorias` | **Autônoma**: dados, migration, rotas e UI próprios; referencia `evento` por FK informal | tabelas + REST | página + slots (linha, criação, badge no calendário) |
 | `recorrencia` | **Estende o core**: gera novos eventos a partir de um modelo; janela + "até"; job de reposição | regra + `EventoService.criar` | página + slot de criação |
 | `analytics` | **Onividente**: escuta o contrato do core e agrega; implementa o SPI de relatório | agregação + endpoint | dashboard |
-| `push-notif` | Canal que reage a um aviso agendado; **dependência estrita** declarada | `requires: [lembretes]` | página de notificações |
+| `notificacao` | **Canal emergente**: reage ao contrato do core `LembreteProgramado` (zero dep entre features); dispatcher agendado marca como enviada na hora | listener + dispatcher (`@Scheduled`) | página (programada → enviada) |
 | `relatorios-pdf` | Gera PDF (sem libs externas); **dependência opcional** de `analytics` via SPI | `integrates-with: [analytics]` | página com download |
 
 No `lite` nenhuma aparece (rota 404, sem tabela, sem link). No `enterprise`
@@ -172,11 +158,12 @@ agregados, sem quebrar.
 
 ```mermaid
 flowchart TD
-  CORE["core: publica EventoCriado / origemId · define SPI SecaoRelatorio"]
+  CORE["core: publica EventoCriado / LembreteProgramado / origemId · define SPI SecaoRelatorio"]
   CORE -->|emergente| LEM[lembretes]
   CORE -->|emergente| ANA[analytics]
   CORE -->|emergente| CAT["categorias (herança via origemId)"]
-  LEM -->|estrita: requires| PUSH[push-notif]
+  LEM -->|publica LembreteProgramado| CORE
+  CORE -->|emergente| NOTIF[notificacao]
   ANA -.opcional: SPI do core.-> PDF[relatorios-pdf]
 ```
 
@@ -184,12 +171,16 @@ flowchart TD
 (`EventoCriado`, e `origemId` quando um evento deriva de outro). Features
 reagem sem se conhecer: `lembretes` agenda, `analytics` conta, `categorias`
 herda as categorias do modelo. Ninguém importa ninguém — só o contrato do core.
+A própria `lembretes` publica outro contrato do core (`LembreteProgramado`);
+`notificacao` reage a ele e dispara o aviso na hora — mesmo padrão, segundo salto.
 
 **2. Estrita — `requires`.** A feature **não compila** sem a dependência:
 dependência Maven no módulo da outra + import do contrato dela.
 `feature-deps.yml` declara `requires: [...]`. O `build.sh` **falha (exit 1)**
-se um cliente contratar a feature sem a dependência. *(O par de exemplo está
-em revisão de design; o mecanismo `requires` é o que importa.)*
+se um cliente contratar a feature sem a dependência. *(Hoje nenhuma feature do
+catálogo declara `requires` — o par antes usado foi reavaliado como acoplamento
+artificial e desfeito; um exemplo concreto e tangível está no roadmap. O
+mecanismo `requires` + guarda do `build.sh` permanece e é o que importa aqui.)*
 
 **3. Opcional — `integrates-with`.** Zero acoplamento Maven entre as features.
 A integração passa por um **ponto de extensão do core**
@@ -233,9 +224,7 @@ CLIENT=lite npm run dev
 CLIENT=enterprise npm run dev
 ```
 
-> Você **nunca** é obrigado a carregar tudo: sem `-P` o `dev` traz todas por
-> conveniência; use `-P lite` para trabalhar/testar o que um cliente enxuto
-> realmente recebe.
+> Você **nunca** é obrigado a carregar tudo: sem `-P` o `dev` traz todas por conveniência; use `-P lite` para trabalhar/testar o que um cliente enxuto realmente recebe.
 
 Build empacotado direto pelo Maven (sem o `build.sh`):
 
@@ -262,10 +251,7 @@ sem colisão.)
 scripts/build.sh <cliente> [--mode=binary|source|image]
 ```
 
-Lê `clients/<cliente>.yml`, **valida o grafo de dependências**
-(`feature-deps.yml`: `requires` faltando → erro/exit 1; `integrates-with` é
-informativo), corta o frontend fisicamente (com restauração via `trap`, não
-suja a worktree) e produz `dist/<cliente>/`.
+Lê `clients/<cliente>.yml`, **valida o grafo de dependências** (`feature-deps.yml`: `requires` faltando → erro/exit 1; `integrates-with` é informativo), corta o frontend fisicamente (com restauração via `trap`, não suja a worktree) e produz `dist/<cliente>/`.
 
 | Modo | O que entrega |
 |---|---|
@@ -275,19 +261,16 @@ suja a worktree) e produz `dist/<cliente>/`.
 
 Princípios:
 
-- **O manifesto é input interno da tooling — nenhum modo o entrega.** As
-  decisões são *projetadas* no artefato (perfil/POM, env, compose).
+- **O manifesto é input interno da tooling — nenhum modo o entrega.** As decisões são *projetadas* no artefato (perfil/POM, env, compose).
 - Containers nomeados `lpsoft-<servico>-<cliente>` (rodam lado a lado).
 - `mvn clean` por cliente (artefato stale contamina).
 
-Provar a guarda de dependência estrita:
+A guarda de dependência estrita (forma — sem par concreto no catálogo hoje;
+será reintroduzida com o exemplo do roadmap). Quando uma feature declara
+`requires: [X]` e o cliente não contrata `X`, `build.sh` aborta antes de gerar:
 
-```bash
-cp clients/plus.yml clients/teste.yml
-sed -i 's/lembretes: true/lembretes: false/' clients/teste.yml   # push-notif sem lembretes
-scripts/build.sh teste
-#  ✗ feature 'push-notif' requer 'lembretes', que não está contratada  → exit 1
-rm clients/teste.yml
+```text
+✗ feature '<feature>' requer '<X>', que não está contratada   → exit 1
 ```
 
 Provar a degradação da opcional:
@@ -301,5 +284,5 @@ scripts/build.sh plus         # mesmo PDF, sem a seção — sem erro
 
 - CI/CD: GitHub Actions (build por matriz de clientes) + publicação no GHCR.
 - Testes E2E (Playwright) cobrindo os fluxos por cliente.
-- Refinos de produto na camada de notificação/lembrete e um exemplo adicional
-  de dependência estrita entre features.
+- Exemplo concreto e tangível de dependência estrita (`requires`) entre
+  features, reintroduzindo a guarda do `build.sh` com um par natural.
