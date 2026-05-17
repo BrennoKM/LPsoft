@@ -1,0 +1,130 @@
+name: CI
+
+# CI apenas (sem CD): prova que o modelo LPS monta e passa POR CLIENTE e que
+# a guarda de dependência estrita do build.sh recusa combinações inválidas.
+# Nenhum deploy/publicação — o empacotamento por cliente é feito localmente
+# pelo scripts/build.sh.
+
+on:
+  push:
+    branches: [dev, main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend-test:
+    name: Backend · testes (perfil dev = todas as features)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      # ubuntu-latest já tem Docker: os testes de integração usam Testcontainers.
+      - name: ./mvnw test
+        working-directory: backend
+        run: chmod +x mvnw && ./mvnw -B -ntp -pl app -am test
+
+  backend-build:
+    name: Backend · build cliente '${{ matrix.client }}'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        client: [lite, plus, enterprise]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      # Eixo LPS: -P <cliente> escolhe QUAIS features entram no build.
+      - name: ./mvnw -P ${{ matrix.client }} package (sem testes)
+        working-directory: backend
+        run: chmod +x mvnw && ./mvnw -B -ntp -P ${{ matrix.client }} -pl app -am package -DskipTests
+
+  frontend-checks:
+    name: Frontend · lint + testes
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - working-directory: frontend
+        run: npm ci
+      - name: Lint (tsc --noEmit && eslint)
+        working-directory: frontend
+        run: npm run lint
+      - name: Testes (vitest run)
+        working-directory: frontend
+        run: npx vitest run
+
+  frontend-build:
+    name: Frontend · build cliente '${{ matrix.client }}'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        client: [lite, plus, enterprise]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - working-directory: frontend
+        run: npm ci
+      # next.config lê clients/<cliente>.yml e baked NEXT_PUBLIC_FEATURES.
+      - name: CLIENT=${{ matrix.client }} npm run build
+        working-directory: frontend
+        run: CLIENT=${{ matrix.client }} npm run build
+
+  lps-guard:
+    name: LPS · guarda de dependência estrita + invariante do empacotador
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Combinação inválida é recusada (resumo-por-categoria sem categorias)
+        run: |
+          cat > clients/_ci_invalid.yml <<'EOF'
+          client: _ci_invalid
+          displayName: "CI Invalid"
+          version: 0.1.0
+          features:
+            categorias: false
+            resumo-por-categoria: true
+          ports: {backend: 8199, frontend: 3099, db: 5499}
+          db: {name: ci, user: ci, password: ci}
+          EOF
+          set +e
+          bash scripts/build.sh _ci_invalid
+          code=$?
+          set -e
+          rm -f clients/_ci_invalid.yml
+          if [ "$code" -eq 0 ]; then
+            echo "::error::build.sh aceitou combinação inválida — a guarda de 'requires' falhou"
+            exit 1
+          fi
+          echo "OK: guarda recusou a combinação inválida (exit=$code)"
+
+      - name: Empacotador modo source não vaza o manifesto
+        run: |
+          bash scripts/build.sh plus --mode=source
+          test -d dist/plus || { echo "::error::dist/plus não foi gerado"; exit 1; }
+          leaked="$(find dist/plus -type f -name '*.yml' -exec grep -l '^client:' {} + 2>/dev/null || true)"
+          if [ -e dist/plus/clients ] || [ -n "$leaked" ]; then
+            echo "::error::manifesto do cliente vazou no artefato source"
+            exit 1
+          fi
+          echo "OK: dist/plus gerado sem nenhum manifesto"
