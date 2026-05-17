@@ -68,3 +68,23 @@ export function registerEventoCreateSlot(component: EventoCreateSlot): void {
 export function getEventoCreateSlots(): readonly EventoCreateSlot[] {
   return eventoCreateSlots;
 }
+
+// ── Slot de painel da página de Categorias ────────────────────────────────
+// A página de Categorias (feature 'categorias') renderiza este slot ao fim.
+// Uma feature que ESTENDE categorias (ex.: 'resumo-por-categoria') registra
+// um painel aqui — categorias não conhece o dependente; só lê o registry do
+// core. Lista vazia → nada renderizado.
+
+export type CategoriaPanelSlot = ComponentType;
+
+const categoriaPanelSlots: CategoriaPanelSlot[] = [];
+
+export function registerCategoriaPanelSlot(component: CategoriaPanelSlot): void {
+  if (!categoriaPanelSlots.includes(component)) {
+    categoriaPanelSlots.push(component);
+  }
+}
+
+export function getCategoriaPanelSlots(): readonly CategoriaPanelSlot[] {
+  return categoriaPanelSlots;
+}

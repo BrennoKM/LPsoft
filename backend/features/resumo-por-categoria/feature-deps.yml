@@ -1,0 +1,11 @@
+# Dependências de feature da 'resumo-por-categoria'.
+# requires:        features que DEVEM estar ativas (build falha se faltar)
+# integrates-with: features que, se presentes, são usadas opcionalmente
+#
+# 'resumo-por-categoria' depende ESTRITAMENTE de 'categorias': importa os tipos
+# Categoria e EventoCategoriaRepository. Sem 'categorias' o módulo nem compila.
+# Um resumo POR categoria não existe sem o conceito de categoria — a guarda do
+# build.sh recusa (exit 1) qualquer cliente que contrate este sem 'categorias'.
+requires:
+  - categorias
+integrates-with: []

@@ -5,6 +5,7 @@ version: 0.1.0
 features:
   lembretes: false
   categorias: false
+  resumo-por-categoria: false
   recorrencia: false
   analytics: false
   notificacao: false
