@@ -8,12 +8,20 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/relatorios")
 @RequiredArgsConstructor
 public class RelatorioController {
 
     private final RelatorioService service;
+
+    /** Prévia do relatório (mesmo conteúdo do PDF, em texto). */
+    @GetMapping("eventos")
+    public List<String> eventosPreview() {
+        return service.linhasRelatorio();
+    }
 
     @GetMapping("eventos.pdf")
     public ResponseEntity<byte[]> eventosPdf() {

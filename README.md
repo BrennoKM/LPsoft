@@ -151,7 +151,7 @@ Cada feature existe para provar um padrão de composição:
 | `recorrencia` | **Estende o core**: gera novos eventos a partir de um modelo; janela + "até"; job de reposição | regra + `EventoService.criar` | página + slot de criação |
 | `analytics` | **Onividente**: escuta o contrato do core e agrega; implementa o SPI de relatório | agregação + endpoint | dashboard |
 | `notificacao` | **Canal emergente**: reage ao contrato do core `LembreteProgramado` (zero dep entre features); dispatcher agendado marca como enviada na hora | listener + dispatcher (`@Scheduled`) | página (programada → enviada) |
-| `relatorios-pdf` | Gera PDF (sem libs externas); **dependência opcional** de `analytics` via SPI | `integrates-with: [analytics]` | página com download |
+| `relatorios-pdf` | Gera PDF (sem libs externas); **dependência opcional** de `analytics` via SPI | `integrates-with: [analytics]` | página com prévia do conteúdo + download |
 
 No `lite` nenhuma aparece (rota 404, sem tabela, sem link). No `enterprise`
 todas. No `plus`, tudo menos `analytics` — e o PDF sai sem a seção de

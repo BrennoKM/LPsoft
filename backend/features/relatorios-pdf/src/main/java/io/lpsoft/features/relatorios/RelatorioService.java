@@ -23,8 +23,12 @@ public class RelatorioService {
     private final EventoRepository eventos;
     private final List<SecaoRelatorio> secoes;
 
+    /**
+     * Conteúdo do relatório (mesmo modelo usado para o PDF e para a prévia).
+     * A seção do core sempre existe; as demais vêm do SPI {@link SecaoRelatorio}.
+     */
     @Transactional(readOnly = true)
-    public byte[] eventosPdf() {
+    public List<String> linhasRelatorio() {
         List<String> linhas = new ArrayList<>();
         linhas.add("Relatorio de eventos");
         linhas.add("Gerado em: " + LocalDate.now());
@@ -36,7 +40,10 @@ public class RelatorioService {
             linhas.add("== " + secao.titulo() + " ==");
             linhas.addAll(secao.linhas());
         }
+        return linhas;
+    }
 
-        return MiniPdf.gerar(linhas);
+    public byte[] eventosPdf() {
+        return MiniPdf.gerar(linhasRelatorio());
     }
 }
