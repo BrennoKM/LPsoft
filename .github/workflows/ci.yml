@@ -2,13 +2,28 @@ name: CI
 
 # CI apenas (sem CD): prova que o modelo LPS monta e passa POR CLIENTE e que
 # a guarda de dependência estrita do build.sh recusa combinações inválidas.
-# Nenhum deploy/publicação — o empacotamento por cliente é feito localmente
-# pelo scripts/build.sh.
+# Nenhum deploy/publicação — o empacotamento por cliente é feito pelo
+# scripts/build.sh.
+#
+# A matriz de clientes NÃO é hardcoded: resolve-matrix descobre os slugs de
+# clients/*.yml (mesma fonte da tooling, via scripts/list-clients.sh). Em
+# workflow_dispatch dá para rodar um subconjunto via input CSV. Sample
+# (manifesto commitado) e cliente real (manifesto injetado de um GitHub
+# Environment) passam pelo MESMO job.
 
 on:
   push:
     branches: [dev, main]
   pull_request:
+  workflow_dispatch:
+    inputs:
+      clientes:
+        description: "Slugs separados por vírgula (vazio = todos os clients/*.yml)"
+        required: false
+        type: string
+
+permissions:
+  contents: read
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -30,25 +45,6 @@ jobs:
         working-directory: backend
         run: chmod +x mvnw && ./mvnw -B -ntp -pl app -am test
 
-  backend-build:
-    name: Backend · build cliente '${{ matrix.client }}'
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        client: [lite, plus, enterprise]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '21'
-          cache: maven
-      # Eixo LPS: -P <cliente> escolhe QUAIS features entram no build.
-      - name: ./mvnw -P ${{ matrix.client }} package (sem testes)
-        working-directory: backend
-        run: chmod +x mvnw && ./mvnw -B -ntp -P ${{ matrix.client }} -pl app -am package -DskipTests
-
   frontend-checks:
     name: Frontend · lint + testes
     runs-on: ubuntu-latest
@@ -68,15 +64,54 @@ jobs:
         working-directory: frontend
         run: npx vitest run
 
-  frontend-build:
-    name: Frontend · build cliente '${{ matrix.client }}'
+  resolve-matrix:
+    name: Resolve · descobre slugs de clients/*.yml
     runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: set
+        name: Monta a matriz de clientes
+        env:
+          DISPATCH_CLIENTES: ${{ inputs.clientes }}
+        run: |
+          chmod +x scripts/list-clients.sh
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "$DISPATCH_CLIENTES" ]; then
+            # Subconjunto avulso: CSV → array JSON (sem espaços/aspas)
+            json="$(printf '%s' "$DISPATCH_CLIENTES" | tr ',' '\n' \
+              | sed 's/[[:space:]]//g; s/"//g; /^$/d' \
+              | awk 'BEGIN{printf "["} {printf "%s\"%s\"", (NR>1?",":""), $0} END{print "]"}')"
+          else
+            # Push/PR (ou dispatch sem input): descoberta dinâmica
+            json="$(scripts/list-clients.sh --json)"
+          fi
+          echo "Matriz resolvida: $json"
+          echo "matrix=$json" >> "$GITHUB_OUTPUT"
+      - name: Falha cedo se a matriz estiver vazia
+        run: |
+          test "$(echo '${{ steps.set.outputs.matrix }}' | tr -d '[:space:]')" != "[]" \
+            || { echo "::error::Nenhum cliente resolvido (clients/*.yml vazio ou CSV inválido)"; exit 1; }
+
+  build-cliente:
+    name: Montagem do cliente '${{ matrix.client }}' (tooling real)
+    needs: [resolve-matrix, backend-test, frontend-checks]
+    runs-on: ubuntu-latest
+    # O específico do cliente real mora no GitHub Environment de mesmo nome
+    # (vars.CLIENT_MANIFEST). Para samples o Environment pode não existir —
+    # nesse caso vars vem vazio e cai no manifesto commitado.
+    environment: ${{ matrix.client }}
     strategy:
       fail-fast: false
       matrix:
-        client: [lite, plus, enterprise]
+        client: ${{ fromJSON(needs.resolve-matrix.outputs.matrix) }}
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -84,10 +119,33 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - working-directory: frontend
         run: npm ci
-      # next.config lê clients/<cliente>.yml e baked NEXT_PUBLIC_FEATURES.
-      - name: CLIENT=${{ matrix.client }} npm run build
-        working-directory: frontend
-        run: CLIENT=${{ matrix.client }} npm run build
+      # Caminho UNIFORME: se o Environment expõe vars.CLIENT_MANIFEST (cliente
+      # real, manifesto fora do git), materializa clients/<slug>.yml a partir
+      # dele; senão usa o commitado (samples lite/plus/enterprise). build.sh
+      # não distingue os dois casos.
+      - name: Materializa manifesto do cliente
+        env:
+          CLIENT_MANIFEST: ${{ vars.CLIENT_MANIFEST }}
+        run: |
+          mkdir -p clients
+          if [ -n "${CLIENT_MANIFEST:-}" ]; then
+            printf '%s' "$CLIENT_MANIFEST" | tr -d '\r' > "clients/${{ matrix.client }}.yml"
+            echo "manifesto de '${{ matrix.client }}' injetado do Environment"
+          else
+            test -f "clients/${{ matrix.client }}.yml" \
+              || { echo "::error::clients/${{ matrix.client }}.yml ausente e vars.CLIENT_MANIFEST não setado"; exit 1; }
+            echo "manifesto de '${{ matrix.client }}' = arquivo commitado (sample)"
+          fi
+      # Exercita a TOOLING REAL: build.sh deriva a composição do manifesto e
+      # GERA o POM enxuto (sem mvn -P, sem ler perfil de cliente do pom.xml —
+      # como seria com um cliente real, cujo manifesto/perfil não existem aqui).
+      - name: scripts/build.sh ${{ matrix.client }}
+        run: bash scripts/build.sh ${{ matrix.client }}
+      - name: Artefato esperado existe (jar + frontend)
+        run: |
+          test -f "dist/${{ matrix.client }}/app.jar" || { echo "::error::app.jar não gerado"; exit 1; }
+          test -d "dist/${{ matrix.client }}/frontend" || { echo "::error::frontend não gerado"; exit 1; }
+          echo "OK: dist/${{ matrix.client }} montado pela tooling"
 
   lps-guard:
     name: LPS · guarda de dependência estrita + invariante do empacotador

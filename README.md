@@ -13,7 +13,7 @@ Uma **única base de código** entrega produtos diferentes por cliente — cada 
 - **Banco:** PostgreSQL 16
 - **Migrations:** Flyway — multi-location, versão por timestamp `YYYYMMDDHHMMSS`
 - **Container:** Docker + Docker Compose
-- **CI/CD:** GitHub Actions + GHCR — *roadmap (ainda não implementado)*
+- **CI:** GitHub Actions (`.github/workflows/ci.yml`) — testes, montagem por cliente via `build.sh` e guarda LPS. **CD** (publicação GHCR/deploy) é *roadmap*.
 
 ## Conceito de LPS
 
@@ -70,7 +70,7 @@ Multi-module Maven. **Dois eixos independentes** no comando:
 
 `-P` escolhe *o que tem dentro*; `-pl app -am` escolhe *o que ligar*.
 
-> **Como o perfil se liga ao manifesto:** hoje o perfil Maven (`backend/pom.xml` + `backend/app/pom.xml`) e o `clients/<slug>.yml` são casados **por convenção (mesmo nome) e mantidos em sincronia manualmente** — o perfil não é gerado. O `build.sh` consome o manifesto para o corte do frontend e a validação do grafo de dependências; para o backend ele apenas invoca `mvn -P <slug>`. Gerar os perfis a partir do manifesto é roadmap.
+> **Manifesto × perfil Maven — quem é a fonte da verdade:** o `clients/<slug>.yml` é a **fonte única**. O `build.sh` (a tooling de entrega) **gera** o POM enxuto a partir do manifesto — sem profiles, sem nome de cliente — tanto no modo `source` quanto no `binary`; ele **não** lê os perfis do `pom.xml` versionado. Esses perfis (`backend/pom.xml` + `backend/app/pom.xml`) existem **só como conveniência de desenvolvimento** (`./mvnw -P <slug>` ad-hoc) e são mantidos à mão por convenção — a entrega real nunca depende deles, então um cliente real jamais precisa aparecer no `pom.xml`. Num cenário de produção o manifesto de um cliente real fica fora do versionamento (como `.env`) e é injetado no CI a partir de uma **variável de GitHub Environment** (`vars.CLIENT_MANIFEST`, Environment de mesmo nome do slug). O workflow trata **todos os clientes igual**: se a variável existe, materializa `clients/<slug>.yml` a partir dela; senão usa o arquivo commitado (caso dos samples `lite`/`plus`/`enterprise`). A descoberta dos slugs no CI vem de `scripts/list-clients.sh` (mesma fonte da tooling, sem matriz hardcoded).
 
 **Descoberta automática (sem registro manual):**
 
@@ -259,8 +259,8 @@ Lê `clients/<cliente>.yml`, **valida o grafo de dependências** (`feature-deps.
 
 | Modo | O que entrega |
 |---|---|
-| `binary` (default) | `mvn -P <cliente> clean package` + Next standalone → JAR + frontend + `docker-compose.yml` + `.env` |
-| `source` | Código-fonte **já filtrado** + **POM enxuto** (só core+app+features contratadas, sem profiles) + compose; builda no `up --build` |
+| `binary` (default) | POM enxuto **gerado do manifesto** (sem profiles) → `package` → JAR + Next standalone + `docker-compose.yml` + `.env` |
+| `source` | Código-fonte **já filtrado** + **POM enxuto gerado** (só core+app+features contratadas, sem profiles) + compose; builda no `up --build` |
 | `image` | Só o `docker-compose.yml` apontando para imagens publicadas (GHCR) |
 
 Princípios:
@@ -288,5 +288,7 @@ scripts/build.sh plus         # mesmo PDF, sem a seção — sem erro
 
 ## Roadmap
 
-- CI/CD: GitHub Actions (build por matriz de clientes) + publicação no GHCR.
+- CD: publicação das imagens no GHCR + deploy. O CI já cobre testes,
+  montagem por cliente com **matriz dinâmica** e injeção do manifesto via
+  GitHub Environment (`vars.CLIENT_MANIFEST`); falta a entrega.
 - Testes E2E (Playwright) cobrindo os fluxos por cliente.
