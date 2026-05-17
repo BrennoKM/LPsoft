@@ -1,0 +1,10 @@
+# Dependências de feature da 'notificacao'.
+# requires:        features que DEVEM estar ativas (build falha se faltar)
+# integrates-with: features que, se presentes, são usadas opcionalmente
+#
+# 'notificacao' é um CANAL de aviso (toast/in-app). Reage ao contrato do core
+# 'LembreteProgramado' — não importa nenhum tipo de outra feature. Relação
+# EMERGENTE via contrato do core: sem 'lembretes' no build ninguém publica o
+# contrato e a lista fica vazia, mas o módulo compila e sobe normalmente.
+requires: []
+integrates-with: []

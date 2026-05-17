@@ -7,7 +7,7 @@ features:
   categorias: true
   recorrencia: true
   analytics: true
-  push-notif: true
+  notificacao: true
   relatorios-pdf: true
 
 ports:
