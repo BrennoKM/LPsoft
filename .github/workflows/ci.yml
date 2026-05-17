@@ -1,0 +1,188 @@
+name: CI
+
+# CI apenas (sem CD): prova que o modelo LPS monta e passa POR CLIENTE e que
+# a guarda de dependência estrita do build.sh recusa combinações inválidas.
+# Nenhum deploy/publicação — o empacotamento por cliente é feito pelo
+# scripts/build.sh.
+#
+# A matriz de clientes NÃO é hardcoded: resolve-matrix descobre os slugs de
+# clients/*.yml (mesma fonte da tooling, via scripts/list-clients.sh). Em
+# workflow_dispatch dá para rodar um subconjunto via input CSV. Sample
+# (manifesto commitado) e cliente real (manifesto injetado de um GitHub
+# Environment) passam pelo MESMO job.
+
+on:
+  push:
+    branches: [dev, main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      clientes:
+        description: "Slugs separados por vírgula (vazio = todos os clients/*.yml)"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend-test:
+    name: Backend · testes (perfil dev = todas as features)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      # ubuntu-latest já tem Docker: os testes de integração usam Testcontainers.
+      - name: ./mvnw test
+        working-directory: backend
+        run: chmod +x mvnw && ./mvnw -B -ntp -pl app -am test
+
+  frontend-checks:
+    name: Frontend · lint + testes
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - working-directory: frontend
+        run: npm ci
+      - name: Lint (tsc --noEmit && eslint)
+        working-directory: frontend
+        run: npm run lint
+      - name: Testes (vitest run)
+        working-directory: frontend
+        run: npx vitest run
+
+  resolve-matrix:
+    name: Resolve · descobre slugs de clients/*.yml
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: set
+        name: Monta a matriz de clientes
+        env:
+          DISPATCH_CLIENTES: ${{ inputs.clientes }}
+        run: |
+          chmod +x scripts/list-clients.sh
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "$DISPATCH_CLIENTES" ]; then
+            # Subconjunto avulso: CSV → array JSON (sem espaços/aspas)
+            json="$(printf '%s' "$DISPATCH_CLIENTES" | tr ',' '\n' \
+              | sed 's/[[:space:]]//g; s/"//g; /^$/d' \
+              | awk 'BEGIN{printf "["} {printf "%s\"%s\"", (NR>1?",":""), $0} END{print "]"}')"
+          else
+            # Push/PR (ou dispatch sem input): descoberta dinâmica
+            json="$(scripts/list-clients.sh --json)"
+          fi
+          echo "Matriz resolvida: $json"
+          echo "matrix=$json" >> "$GITHUB_OUTPUT"
+      - name: Falha cedo se a matriz estiver vazia
+        run: |
+          test "$(echo '${{ steps.set.outputs.matrix }}' | tr -d '[:space:]')" != "[]" \
+            || { echo "::error::Nenhum cliente resolvido (clients/*.yml vazio ou CSV inválido)"; exit 1; }
+
+  build-cliente:
+    name: Montagem do cliente '${{ matrix.client }}' (tooling real)
+    needs: [resolve-matrix, backend-test, frontend-checks]
+    runs-on: ubuntu-latest
+    # O específico do cliente real mora no GitHub Environment de mesmo nome
+    # (vars.CLIENT_MANIFEST). Para samples o Environment pode não existir —
+    # nesse caso vars vem vazio e cai no manifesto commitado.
+    environment: ${{ matrix.client }}
+    strategy:
+      fail-fast: false
+      matrix:
+        client: ${{ fromJSON(needs.resolve-matrix.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - working-directory: frontend
+        run: npm ci
+      # Caminho UNIFORME: se o Environment expõe vars.CLIENT_MANIFEST (cliente
+      # real, manifesto fora do git), materializa clients/<slug>.yml a partir
+      # dele; senão usa o commitado (samples lite/plus/enterprise). build.sh
+      # não distingue os dois casos.
+      - name: Materializa manifesto do cliente
+        env:
+          CLIENT_MANIFEST: ${{ vars.CLIENT_MANIFEST }}
+        run: |
+          mkdir -p clients
+          if [ -n "${CLIENT_MANIFEST:-}" ]; then
+            printf '%s' "$CLIENT_MANIFEST" | tr -d '\r' > "clients/${{ matrix.client }}.yml"
+            echo "manifesto de '${{ matrix.client }}' injetado do Environment"
+          else
+            test -f "clients/${{ matrix.client }}.yml" \
+              || { echo "::error::clients/${{ matrix.client }}.yml ausente e vars.CLIENT_MANIFEST não setado"; exit 1; }
+            echo "manifesto de '${{ matrix.client }}' = arquivo commitado (sample)"
+          fi
+      # Exercita a TOOLING REAL: build.sh deriva a composição do manifesto e
+      # GERA o POM enxuto (sem mvn -P, sem ler perfil de cliente do pom.xml —
+      # como seria com um cliente real, cujo manifesto/perfil não existem aqui).
+      - name: scripts/build.sh ${{ matrix.client }}
+        run: bash scripts/build.sh ${{ matrix.client }}
+      - name: Artefato esperado existe (jar + frontend)
+        run: |
+          test -f "dist/${{ matrix.client }}/app.jar" || { echo "::error::app.jar não gerado"; exit 1; }
+          test -d "dist/${{ matrix.client }}/frontend" || { echo "::error::frontend não gerado"; exit 1; }
+          echo "OK: dist/${{ matrix.client }} montado pela tooling"
+
+  lps-guard:
+    name: LPS · guarda de dependência estrita + invariante do empacotador
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Combinação inválida é recusada (resumo-por-categoria sem categorias)
+        run: |
+          cat > clients/_ci_invalid.yml <<'EOF'
+          client: _ci_invalid
+          displayName: "CI Invalid"
+          version: 0.1.0
+          features:
+            categorias: false
+            resumo-por-categoria: true
+          ports: {backend: 8199, frontend: 3099, db: 5499}
+          db: {name: ci, user: ci, password: ci}
+          EOF
+          set +e
+          bash scripts/build.sh _ci_invalid
+          code=$?
+          set -e
+          rm -f clients/_ci_invalid.yml
+          if [ "$code" -eq 0 ]; then
+            echo "::error::build.sh aceitou combinação inválida — a guarda de 'requires' falhou"
+            exit 1
+          fi
+          echo "OK: guarda recusou a combinação inválida (exit=$code)"
+
+      - name: Empacotador modo source não vaza o manifesto
+        run: |
+          bash scripts/build.sh plus --mode=source
+          test -d dist/plus || { echo "::error::dist/plus não foi gerado"; exit 1; }
+          leaked="$(find dist/plus -type f -name '*.yml' -exec grep -l '^client:' {} + 2>/dev/null || true)"
+          if [ -e dist/plus/clients ] || [ -n "$leaked" ]; then
+            echo "::error::manifesto do cliente vazou no artefato source"
+            exit 1
+          fi
+          echo "OK: dist/plus gerado sem nenhum manifesto"
