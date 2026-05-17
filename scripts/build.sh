@@ -288,13 +288,14 @@ EOF
 # POM enxuto: só core + app + features contratadas, SEM profiles e SEM
 # mencionar nenhuma outra feature/cliente — o artefato é self-contained.
 gen_parent_pom_slim() {
+  local dest="$1"
   local mods
   mods=$'        <module>core</module>\n        <module>app</module>\n'
   while IFS= read -r f; do
     [ -n "$f" ] || continue
     mods+="        <module>features/$f</module>"$'\n'
   done < <(enabled_each)
-  cat > "$OUT/backend/pom.xml" <<EOF
+  cat > "$dest/pom.xml" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -348,6 +349,7 @@ EOF
 }
 
 gen_app_pom_slim() {
+  local dest="$1"
   local deps=""
   while IFS= read -r f; do
     [ -n "$f" ] || continue
@@ -357,7 +359,7 @@ gen_app_pom_slim() {
     deps+=$'            <version>${project.version}</version>\n'
     deps+=$'        </dependency>\n'
   done < <(enabled_each)
-  cat > "$OUT/backend/app/pom.xml" <<EOF
+  cat > "$dest/app/pom.xml" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -411,11 +413,34 @@ $deps    </dependencies>
 EOF
 }
 
+# Monta uma árvore de backend ENXUTA (core+app+features contratadas) com o
+# POM gerado do manifesto, SEM profiles. É o que o cliente real teria — a
+# tooling nunca lê o perfil do pom.xml versionado (esse é só conveniência
+# de dev). Usada por binary (compila e descarta) e source (entrega o código).
+stage_backend_slim() {
+  local dest="$1"
+  mkdir -p "$dest"
+  rsync -a --exclude target "$ROOT/backend/core" "$ROOT/backend/app" "$dest/"
+  cp "$ROOT/backend/mvnw" "$dest/" 2>/dev/null || true
+  rsync -a "$ROOT/backend/.mvn" "$dest/" 2>/dev/null || true
+  while IFS= read -r f; do
+    [ -n "$f" ] || continue
+    mkdir -p "$dest/features"
+    rsync -a --exclude target "$ROOT/backend/features/$f" "$dest/features/"
+  done < <(enabled_each)
+  gen_parent_pom_slim "$dest"
+  gen_app_pom_slim "$dest"
+}
+
 # ── Modo: binary ──────────────────────────────────────────────────────────
 build_binary() {
-  info "Backend: mvn -P $CLIENT clean package"
-  ( cd "$ROOT/backend" && ./mvnw -q -P "$CLIENT" -pl app -am -DskipTests clean package )
-  cp "$ROOT/backend/app/target/lpsoft.jar" "$OUT/app.jar"
+  info "Backend: POM enxuto do manifesto + package (sem -P; igual a um cliente real)"
+  local bdir
+  bdir="$(mktemp -d)"
+  stage_backend_slim "$bdir"
+  ( cd "$bdir" && ./mvnw -q -pl app -am -DskipTests clean package )
+  cp "$bdir/app/target/lpsoft.jar" "$OUT/app.jar"
+  rm -rf "$bdir"
 
   cut_frontend
   local api_url="http://localhost:${PORT_BE}/api/v1"
@@ -438,17 +463,8 @@ build_binary() {
 build_source() {
   info "Copiando código-fonte filtrado (POM enxuto, sem manifesto)"
   mkdir -p "$OUT/backend" "$OUT/frontend"
-  rsync -a --exclude target "$ROOT/backend/core" "$ROOT/backend/app" "$OUT/backend/"
-  cp "$ROOT/backend/mvnw" "$OUT/backend/" 2>/dev/null || true
-  rsync -a "$ROOT/backend/.mvn" "$OUT/backend/" 2>/dev/null || true
+  stage_backend_slim "$OUT/backend"
   [ -f "$ROOT/backend/Dockerfile" ] && cp "$ROOT/backend/Dockerfile" "$OUT/backend/"
-  while IFS= read -r f; do
-    [ -n "$f" ] || continue
-    mkdir -p "$OUT/backend/features"
-    rsync -a --exclude target "$ROOT/backend/features/$f" "$OUT/backend/features/"
-  done < <(enabled_each)
-  gen_parent_pom_slim
-  gen_app_pom_slim
   cut_frontend
   rsync -a --exclude node_modules --exclude .next "$ROOT/frontend/" "$OUT/frontend/"
   restore_frontend
