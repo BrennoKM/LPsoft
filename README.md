@@ -19,7 +19,7 @@ Uma **única base de código** entrega produtos diferentes por cliente — cada 
 
 | Conceito | No LPsoft |
 |---|---|
-| **Core** | A plataforma comum: domínio (`Usuario`, `Evento`), auth JWT, contratos de evento, pontos de extensão (SPI). Não conhece nenhuma feature. |
+| **Core** | A plataforma comum e **funcional por si só**: tem suas próprias funcionalidades — cadastro e login (auth JWT), CRUD de eventos, calendário — além dos contratos de evento e dos pontos de extensão (SPI). Não depende de, nem conhece, nenhuma feature opcional. |
 | **Feature** | Módulo **opcional**, contratável por cliente. Depende só do core (e, quando declarado, de outra feature). |
 | **Cliente** | Um manifesto `clients/<slug>.yml` — **fonte única**: quais features, portas, banco. "Contratar uma feature" = uma flag `true`. |
 | **Montagem** | O perfil Maven (backend) e o composition root (frontend) materializam o manifesto. O que não foi contratado **não existe** no artefato daquele cliente. |

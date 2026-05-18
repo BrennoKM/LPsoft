@@ -41,9 +41,35 @@ jobs:
           java-version: '21'
           cache: maven
       # ubuntu-latest já tem Docker: os testes de integração usam Testcontainers.
-      - name: ./mvnw test
+      # verify dispara jacoco:report (sem gate — só medir).
+      - name: ./mvnw verify (+ JaCoCo report)
         working-directory: backend
-        run: chmod +x mvnw && ./mvnw -B -ntp -pl app -am test
+        run: chmod +x mvnw && ./mvnw -B -ntp -pl app -am verify
+      - name: Resumo (testes + cobertura) no GitHub
+        if: always()
+        working-directory: backend
+        run: |
+          {
+            echo "## Backend — testes e cobertura (JaCoCo)"
+            echo
+            LC_ALL=C find . -path '*/surefire-reports/*.txt' -exec grep -hE '^Tests run:' {} + 2>/dev/null \
+              | sed -E 's/Tests run: ([0-9]+), Failures: ([0-9]+), Errors: ([0-9]+), Skipped: ([0-9]+).*/\1 \2 \3 \4/' \
+              | awk '{t+=$1;f+=$2;e+=$3;s+=$4} END{printf "**Testes:** %d run · %d fail · %d err · %d skip\n", t,f,e,s}'
+            echo
+            echo "| Módulo | Cobertura (instrução) |"
+            echo "|---|--:|"
+            find . -name jacoco.csv -path '*/site/jacoco/*' | sort | while read -r csv; do
+              mod=$(echo "$csv" | sed -E 's|^\./||; s|/target.*||')
+              pct=$(LC_ALL=C awk -F, 'NR>1{m+=$4;c+=$5} END{ if(m+c>0) printf "%.1f%%", 100*c/(m+c); else print "n/a"}' "$csv")
+              echo "| $mod | $pct |"
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload JaCoCo (por módulo)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jacoco-backend
+          path: backend/**/target/site/jacoco/
 
   frontend-checks:
     name: Frontend · lint + testes
@@ -60,9 +86,29 @@ jobs:
       - name: Lint (tsc --noEmit && eslint)
         working-directory: frontend
         run: npm run lint
-      - name: Testes (vitest run)
+      - name: Testes + cobertura (vitest run --coverage)
         working-directory: frontend
-        run: npx vitest run
+        run: npx vitest run --coverage --reporter=dot --reporter=json --outputFile=coverage/vitest-report.json
+      - name: Resumo (vitest + cobertura) no GitHub
+        if: always()
+        working-directory: frontend
+        run: |
+          # shellcheck disable=SC2016  # script Node entre aspas simples (template literals JS, não shell)
+          node -e '
+            const fs=require("fs");
+            const L=["## Frontend — vitest + cobertura (v8)",""];
+            let r={};try{r=JSON.parse(fs.readFileSync("coverage/vitest-report.json","utf8"))}catch{}
+            L.push(`**Testes:** ${r.numPassedTests??"?"}/${r.numTotalTests??"?"} passaram · ${r.numFailedTests??0} falharam`);
+            let t={};try{t=JSON.parse(fs.readFileSync("coverage/coverage-summary.json","utf8")).total}catch{}
+            if(t.lines)L.push("",`**Cobertura:** linhas ${t.lines.pct}% · funções ${t.functions.pct}% · branches ${t.branches.pct}%`);
+            fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, L.join("\n")+"\n");
+          '
+      - name: Upload cobertura frontend
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-frontend
+          path: frontend/coverage/
 
   resolve-matrix:
     name: Resolve · descobre slugs de clients/*.yml
