@@ -208,22 +208,28 @@ Requisitos: Java 21, Node 20+, Docker + Compose.
 docker compose --profile dev up -d db-dev
 
 # 2. Backend (pasta backend/) — todas as features (perfil dev default)
-./mvnw -pl app -am spring-boot:run            # API em http://localhost:8130/api/v1
+#    SERVER_PORT explícito: sem ele o Spring sobe na porta PADRÃO 8080
+#    (que não usamos) e o frontend procura a API em :8130 por padrão.
+SERVER_PORT=8130 ./mvnw -pl app -am spring-boot:run   # API em http://localhost:8130/api/v1
 
 # 3. Frontend (pasta frontend/)
-npm run dev                                   # http://localhost:3050
+npm run dev                                   # http://localhost:3050 → API em :8130
 ```
+
+> **Portas padrão não são usadas.** O backend local **precisa** de
+> `SERVER_PORT=8130` (o default 8080 do Spring é evitado e não casa com o
+> frontend). Postgres dev em :5482 e frontend em :3050 já são não-padrão.
 
 **Rodar exatamente como um cliente recebe:**
 
 ```bash
-# Backend
-./mvnw -pl app -am spring-boot:run            # tudo (default dev)
-./mvnw -P lite       -pl app -am spring-boot:run   # zero features
-./mvnw -P plus       -pl app -am spring-boot:run   # tudo menos analytics
-./mvnw -P enterprise -pl app -am spring-boot:run   # todas
+# Backend (sempre SERVER_PORT=8130 — a porta padrão 8080 não é usada)
+SERVER_PORT=8130 ./mvnw -pl app -am spring-boot:run            # tudo (default dev)
+SERVER_PORT=8130 ./mvnw -P lite       -pl app -am spring-boot:run   # zero features
+SERVER_PORT=8130 ./mvnw -P plus       -pl app -am spring-boot:run   # tudo menos analytics
+SERVER_PORT=8130 ./mvnw -P enterprise -pl app -am spring-boot:run   # todas
 
-# Frontend (espelha via CLIENT)
+# Frontend (espelha via CLIENT) — :3050, fala com :8130
 CLIENT=lite npm run dev
 CLIENT=enterprise npm run dev
 ```
