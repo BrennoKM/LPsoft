@@ -27,6 +27,12 @@ spring:
     # Seguro porque nenhuma migration cruza fronteira de módulo (sem FK
     # cross-módulo; integridade validada na aplicação).
     out-of-order: true
+    # Par do out-of-order: ao DESCONTRATAR uma feature, a migration dela
+    # continua no flyway_schema_history mas some do classpath. *:missing
+    # tolera isso — o app sobe e as tabelas/dados da feature ficam órfãos
+    # (seguro: sem FK cross-módulo). Dropar dados é offboarding explícito,
+    # nunca efeito de virar a flag. Checksum das presentes segue validado.
+    ignore-migration-patterns: "*:missing"
 
 server:
   port: ${SERVER_PORT:8080}

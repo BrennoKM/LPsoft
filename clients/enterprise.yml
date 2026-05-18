@@ -17,6 +17,6 @@ ports:
   db: 5485
 
 db:
-  name: lpsoft_enterprise
+  database: lpsoft_enterprise
   user: lpsoft
   password: lpsoft

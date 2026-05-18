@@ -60,7 +60,7 @@ VERSION="$(manifest_scalar version)"
 PORT_BE="$(section_val ports backend)"
 PORT_FE="$(section_val ports frontend)"
 PORT_DB="$(section_val ports db)"
-DB_NAME="$(section_val db name)"
+DB_NAME="$(section_val db database)"
 DB_USER="$(section_val db user)"
 DB_PASS="$(section_val db password)"
 
@@ -222,7 +222,7 @@ services:
     ports:
       - "\${PORT_DB}:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U \${DB_USER}"]
+      test: ["CMD-SHELL", "pg_isready -U \${DB_USER} -d \${DB_NAME}"]
       interval: 5s
       timeout: 5s
       retries: 5

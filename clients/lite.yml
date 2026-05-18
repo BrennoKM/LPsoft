@@ -17,6 +17,6 @@ ports:
   db: 5484
 
 db:
-  name: lpsoft_lite
+  database: lpsoft_lite
   user: lpsoft
   password: lpsoft
