@@ -10,10 +10,12 @@ name: CI
 # workflow_dispatch dá para rodar um subconjunto via input CSV. Sample
 # (manifesto commitado) e cliente real (manifesto injetado de um GitHub
 # Environment) passam pelo MESMO job.
+#
+# Gatilho: SÓ pull_request (gate de merge) + workflow_dispatch (rodar à mão
+# após um push direto/urgente). NÃO roda em push — o merge dispara só o
+# deploy, sem re-testar (sem duplicar CI+CD).
 
 on:
-  push:
-    branches: [dev, main]
   pull_request:
   workflow_dispatch:
     inputs:
@@ -187,11 +189,32 @@ jobs:
       # como seria com um cliente real, cujo manifesto/perfil não existem aqui).
       - name: scripts/build.sh ${{ matrix.client }}
         run: bash scripts/build.sh ${{ matrix.client }}
-      - name: Artefato esperado existe (jar + frontend)
+      # Asserção POR MODO DE ENTREGA: o cliente decide binary|source|image
+      # (campo delivery do manifesto). O modo resolvido é gravado pelo
+      # build.sh em dist/<c>/VERSION — fonte única, sem duplicar a lógica.
+      - name: Artefato esperado existe (por modo de entrega)
         run: |
-          test -f "dist/${{ matrix.client }}/app.jar" || { echo "::error::app.jar não gerado"; exit 1; }
-          test -d "dist/${{ matrix.client }}/frontend" || { echo "::error::frontend não gerado"; exit 1; }
-          echo "OK: dist/${{ matrix.client }} montado pela tooling"
+          out="dist/${{ matrix.client }}"
+          test -f "$out/docker-compose.yml" || { echo "::error::docker-compose.yml não gerado"; exit 1; }
+          test -f "$out/.env"               || { echo "::error::.env não gerado"; exit 1; }
+          mode="$(sed -E 's/.*\(.*,[[:space:]]*([a-z]+)\)[[:space:]]*$/\1/' "$out/VERSION")"
+          case "$mode" in
+            binary)
+              test -f "$out/app.jar"  || { echo "::error::binary: app.jar não gerado"; exit 1; }
+              test -d "$out/frontend" || { echo "::error::binary: frontend não gerado"; exit 1; }
+              ;;
+            source)
+              test -d "$out/backend"  || { echo "::error::source: backend/ não gerado"; exit 1; }
+              test -d "$out/frontend" || { echo "::error::source: frontend/ não gerado"; exit 1; }
+              ;;
+            image)
+              : # entrega só compose + .env (imagens no GHCR)
+              ;;
+            *)
+              echo "::error::modo de entrega desconhecido em VERSION: '$mode'"; exit 1
+              ;;
+          esac
+          echo "OK: dist/${{ matrix.client }} montado pela tooling (modo $mode)"
 
   lps-guard:
     name: LPS · guarda de dependência estrita + invariante do empacotador
