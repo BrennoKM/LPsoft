@@ -1,6 +1,7 @@
 client: lite
 displayName: "LPsoft Lite"
 version: 0.1.0
+delivery: binary
 
 features:
   lembretes: false
@@ -15,8 +16,3 @@ ports:
   backend: 8132
   frontend: 3052
   db: 5484
-
-db:
-  name: lpsoft_lite
-  user: lpsoft
-  password: lpsoft

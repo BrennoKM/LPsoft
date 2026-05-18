@@ -20,6 +20,19 @@ spring:
     enabled: true
     locations: classpath:db/migration/core
     baseline-on-migrate: false
+    # Trilha por feature é anexada em runtime (FlywayConfigurationCustomizer).
+    # Uma feature contratada depois traz migration de versão anterior à última
+    # já aplicada; out-of-order a aplica para frente, sem recriar o banco — é o
+    # que permite liberar uma feature a um cliente já no ar (dados preservados).
+    # Seguro porque nenhuma migration cruza fronteira de módulo (sem FK
+    # cross-módulo; integridade validada na aplicação).
+    out-of-order: true
+    # Par do out-of-order: ao DESCONTRATAR uma feature, a migration dela
+    # continua no flyway_schema_history mas some do classpath. *:missing
+    # tolera isso — o app sobe e as tabelas/dados da feature ficam órfãos
+    # (seguro: sem FK cross-módulo). Dropar dados é offboarding explícito,
+    # nunca efeito de virar a flag. Checksum das presentes segue validado.
+    ignore-migration-patterns: "*:missing"
 
 server:
   port: ${SERVER_PORT:8080}

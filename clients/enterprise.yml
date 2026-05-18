@@ -1,6 +1,7 @@
 client: enterprise
 displayName: "LPsoft Enterprise"
 version: 0.1.0
+delivery: binary
 
 features:
   lembretes: true
@@ -15,8 +16,3 @@ ports:
   backend: 8133
   frontend: 3053
   db: 5485
-
-db:
-  name: lpsoft_enterprise
-  user: lpsoft
-  password: lpsoft

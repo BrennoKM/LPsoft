@@ -209,7 +209,6 @@ jobs:
             categorias: false
             resumo-por-categoria: true
           ports: {backend: 8199, frontend: 3099, db: 5499}
-          db: {name: ci, user: ci, password: ci}
           EOF
           set +e
           bash scripts/build.sh _ci_invalid

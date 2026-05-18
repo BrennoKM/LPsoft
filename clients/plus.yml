@@ -1,6 +1,7 @@
 client: plus
 displayName: "LPsoft Plus"
 version: 0.1.0
+delivery: binary
 
 features:
   lembretes: true
@@ -15,8 +16,3 @@ ports:
   backend: 8134
   frontend: 3054
   db: 5486
-
-db:
-  name: lpsoft_plus
-  user: lpsoft
-  password: lpsoft
