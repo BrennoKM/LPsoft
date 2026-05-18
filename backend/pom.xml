@@ -108,4 +108,38 @@
             </modules>
         </profile>
     </profiles>
+
+    <!--
+        Cobertura: JaCoCo declarado uma única vez no parent → herdado por
+        core/app/features (inclusive POMs enxutos gerados pelo build.sh).
+        Só prepare-agent + report (SEM jacoco:check — sem gate; medir e
+        publicar artifact é suficiente para o PoC). Report por módulo em
+        target/site/jacoco/ (sem agregador, que quebraria lite/build.sh).
+        Não há <argLine> manual: o surefire do core só usa
+        systemPropertyVariables; prepare-agent injeta @{argLine} sem conflito.
+    -->
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <version>0.8.12</version>
+                <executions>
+                    <execution>
+                        <id>jacoco-prepare-agent</id>
+                        <goals>
+                            <goal>prepare-agent</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>jacoco-report</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>report</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
 </project>
