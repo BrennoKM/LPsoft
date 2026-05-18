@@ -29,14 +29,13 @@ info() { echo ">> $*"; }
 # ── Argumentos ────────────────────────────────────────────────────────────
 [ $# -ge 1 ] || die "uso: scripts/build.sh <cliente> [--mode=binary|source|image]"
 CLIENT="$1"; shift
-MODE="binary"
+MODE_ARG=""   # --mode= explícito tem prioridade; vazio = decidir pelo manifesto
 for arg in "$@"; do
   case "$arg" in
-    --mode=*) MODE="${arg#--mode=}" ;;
+    --mode=*) MODE_ARG="${arg#--mode=}" ;;
     *) die "argumento desconhecido: $arg" ;;
   esac
 done
-case "$MODE" in binary|source|image) ;; *) die "modo inválido: $MODE" ;; esac
 
 MANIFEST="$ROOT/clients/$CLIENT.yml"
 [ -f "$MANIFEST" ] || die "manifesto não encontrado: clients/$CLIENT.yml"
@@ -46,6 +45,14 @@ manifest_scalar() {
   grep -E "^$1:" "$MANIFEST" | head -1 \
     | sed -E "s/^$1:[[:space:]]*//; s/^\"//; s/\"$//"
 }
+
+# Modo de entrega: --mode= (prioridade) > campo 'delivery' do manifesto > binary
+MODE="${MODE_ARG:-$(manifest_scalar delivery 2>/dev/null || true)}"
+MODE="${MODE:-binary}"
+case "$MODE" in
+  binary|source|image) ;;
+  *) die "modo de entrega inválido: '$MODE' (use binary|source|image)" ;;
+esac
 section_val() {
   awk -v sec="$1" -v key="$2" '
     $0 ~ "^"sec":" { ins=1; next }
@@ -60,9 +67,20 @@ VERSION="$(manifest_scalar version)"
 PORT_BE="$(section_val ports backend)"
 PORT_FE="$(section_val ports frontend)"
 PORT_DB="$(section_val ports db)"
-DB_NAME="$(section_val db database)"
-DB_USER="$(section_val db user)"
-DB_PASS="$(section_val db password)"
+# Banco/segredo NÃO vêm do manifesto (manifesto = composição, sem segredo).
+# Vêm do .env: .env da raiz (gitignored, override local do dev) se existir,
+# senão .env.example (contrato commitado, placeholders). No CD o secrets.ENV
+# do Environment sobrescreve o .env inteiro — o cliente controla por lá.
+ENV_SRC="$ROOT/.env"; [ -f "$ENV_SRC" ] || ENV_SRC="$ROOT/.env.example"
+env_value() { grep -E "^$1=" "$ENV_SRC" 2>/dev/null | tail -1 | sed -E "s/^$1=//"; }
+# Banco e segredo vêm do .env (não do manifesto — manifesto = composição):
+# .env da raiz (gitignored, override local do dev) se existir, senão
+# .env.example (contrato commitado). No CD o secrets.ENV do Environment
+# sobrescreve o .env inteiro. Nomes alinhados ao que o Spring lê (DATABASE_*).
+DATABASE_NAME="$(env_value DATABASE_NAME)";         DATABASE_NAME="${DATABASE_NAME:-lpsoft}"
+DATABASE_USER="$(env_value DATABASE_USER)";         DATABASE_USER="${DATABASE_USER:-lpsoft}"
+DATABASE_PASSWORD="$(env_value DATABASE_PASSWORD)"; DATABASE_PASSWORD="${DATABASE_PASSWORD:-lpsoft}"
+JWT_SECRET="$(env_value JWT_SECRET)";               JWT_SECRET="${JWT_SECRET:-change-me-in-production-use-openssl-rand}"
 
 # Catálogo completo (diretórios de feature no backend)
 ALL_FEATURES=()
@@ -179,10 +197,10 @@ VERSION=$VERSION
 PORT_BACKEND=$PORT_BE
 PORT_FRONTEND=$PORT_FE
 PORT_DB=$PORT_DB
-DB_NAME=$DB_NAME
-DB_USER=$DB_USER
-DB_PASSWORD=$DB_PASS
-JWT_SECRET=troque-este-segredo-em-producao-min-32-bytes-please
+DATABASE_NAME=$DATABASE_NAME
+DATABASE_USER=$DATABASE_USER
+DATABASE_PASSWORD=$DATABASE_PASSWORD
+JWT_SECRET=$JWT_SECRET
 EOF
 }
 
@@ -216,13 +234,13 @@ services:
     image: postgres:16-alpine
     container_name: lpsoft-db-$CLIENT
     environment:
-      POSTGRES_DB: \${DB_NAME}
-      POSTGRES_USER: \${DB_USER}
-      POSTGRES_PASSWORD: \${DB_PASSWORD}
+      POSTGRES_DB: \${DATABASE_NAME}
+      POSTGRES_USER: \${DATABASE_USER}
+      POSTGRES_PASSWORD: \${DATABASE_PASSWORD}
     ports:
       - "\${PORT_DB}:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U \${DB_USER} -d \${DB_NAME}"]
+      test: ["CMD-SHELL", "pg_isready -U \${DATABASE_USER} -d \${DATABASE_NAME}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -233,9 +251,9 @@ services:
 $be_svc
     container_name: lpsoft-backend-$CLIENT
     environment:
-      - DATABASE_URL=jdbc:postgresql://db:5432/\${DB_NAME}
-      - DATABASE_USER=\${DB_USER}
-      - DATABASE_PASSWORD=\${DB_PASSWORD}
+      - DATABASE_URL=jdbc:postgresql://db:5432/\${DATABASE_NAME}
+      - DATABASE_USER=\${DATABASE_USER}
+      - DATABASE_PASSWORD=\${DATABASE_PASSWORD}
       - SERVER_PORT=8080
       - JWT_SECRET=\${JWT_SECRET}
       - CORS_ALLOWED_ORIGINS=http://localhost:\${PORT_FRONTEND}
