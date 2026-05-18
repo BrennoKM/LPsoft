@@ -1,0 +1,106 @@
+name: Deploy
+
+# CD de produção. Manual por padrão (workflow_dispatch com CSV de clientes).
+# push:main NÃO faz deploy automático: a lista de auto-deploy vem VAZIA — para
+# habilitar um cliente automático, adicione o slug em AUTO_DEPLOY abaixo.
+# Espelha o padrão de template do projeto-referência (deploy + deploy-dev
+# chamando _deploy-base.yml reutilizável); aqui agnóstico, Java/Next.
+
+on:
+  workflow_dispatch:
+    inputs:
+      clientes:
+        description: "Slugs separados por vírgula (ex.: enterprise, cliente-x)"
+        required: true
+        type: string
+      ref:
+        description: "Branch, tag ou SHA (padrão: main)"
+        required: false
+        default: main
+        type: string
+      mode:
+        description: "Override de modo (binary|source|image; vazio = delivery do manifesto)"
+        required: false
+        default: ""
+        type: string
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  test:
+    name: Testes (suíte completa — gate de deploy)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      # Suíte COMPLETA antes de entregar (mesma do ci.yml): backend verify
+      # (unit + integração Testcontainers + JaCoCo) e frontend lint + vitest
+      # com cobertura. O smoke leve roda DEPOIS, na instância (_deploy-base).
+      - name: Backend · ./mvnw verify (unit + integração + JaCoCo)
+        working-directory: backend
+        run: |
+          chmod +x mvnw
+          ./mvnw -B -ntp -pl app -am verify
+      - name: Frontend · lint + vitest --coverage
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run lint
+          npx vitest run --coverage --reporter=dot
+
+  resolve-matrix:
+    name: Resolve · clientes a entregar
+    needs: test
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set.outputs.matrix }}
+    steps:
+      - id: set
+        env:
+          DISPATCH_CLIENTES: ${{ inputs.clientes }}
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "$DISPATCH_CLIENTES" ]; then
+            # Subconjunto avulso: CSV → array JSON (mesmo padrão do ci.yml)
+            json="$(printf '%s' "$DISPATCH_CLIENTES" | tr ',' '\n' \
+              | sed 's/[[:space:]]//g; s/"//g; /^$/d' \
+              | awk 'BEGIN{printf "["} {printf "%s\"%s\"", (NR>1?",":""), $0} END{print "]"}')"
+          else
+            # push:main — clientes com AUTO-DEPLOY. VAZIO por padrão: nada sobe
+            # sozinho. Para automatizar um cliente, liste o slug, ex.:
+            #   AUTO_DEPLOY='["enterprise"]'
+            AUTO_DEPLOY='[]'
+            json="$AUTO_DEPLOY"
+          fi
+          echo "Matriz: $json"
+          echo "matrix=$json" >> "$GITHUB_OUTPUT"
+
+  deploy:
+    name: Deploy
+    needs: resolve-matrix
+    # Matriz vazia (push sem auto-deploy) ⇒ job sem combinações = não roda.
+    strategy:
+      fail-fast: false
+      matrix:
+        client: ${{ fromJSON(needs.resolve-matrix.outputs.matrix) }}
+    uses: ./.github/workflows/_deploy-base.yml
+    with:
+      client: ${{ matrix.client }}
+      ref: ${{ inputs.ref || 'main' }}
+      mode: ${{ inputs.mode || '' }}
+    secrets: inherit

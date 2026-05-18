@@ -1,0 +1,154 @@
+name: Deploy Base
+
+# Workflow REUTILIZÁVEL (chamado por deploy.yml e deploy-dev.yml).
+# Entrega um cliente para a VPS: materializa o manifesto (mesmo padrão do
+# ci.yml — Environment de mesmo nome do cliente), monta com scripts/build.sh
+# (modo vem do campo `delivery:` do manifesto, ou do override `mode`), envia
+# dist/<cliente>/ por SCP e sobe com docker compose. Sem registry.
+
+on:
+  workflow_call:
+    inputs:
+      client:
+        required: true
+        type: string
+      ref:
+        required: false
+        type: string
+        default: main
+      mode:
+        description: "Override do modo (binary|source|image; vazio = campo delivery do manifesto)"
+        required: false
+        type: string
+        default: ""
+    secrets:
+      VPS_IP:
+        required: true
+      VPS_USERNAME:
+        required: true
+      VPS_SSH_KEY:
+        required: true
+      ENV:
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy '${{ inputs.client }}' → VPS
+    runs-on: ubuntu-latest
+    # O específico do cliente mora no GitHub Environment de mesmo nome:
+    # vars.CLIENT_MANIFEST (manifesto fora do git), vars.DEPLOY_PATH e os
+    # secrets VPS_* / ENV. Sample sem Environment cai no manifesto commitado.
+    environment: ${{ inputs.client }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - working-directory: frontend
+        run: npm ci
+
+      # Caminho UNIFORME (idêntico ao ci.yml): Environment expõe o manifesto
+      # do cliente real; sample cai no arquivo commitado. build.sh não distingue.
+      - name: Materializa manifesto do cliente
+        env:
+          CLIENT_MANIFEST: ${{ vars.CLIENT_MANIFEST }}
+        run: |
+          mkdir -p clients
+          if [ -n "${CLIENT_MANIFEST:-}" ]; then
+            printf '%s' "$CLIENT_MANIFEST" | tr -d '\r' > "clients/${{ inputs.client }}.yml"
+            echo "manifesto de '${{ inputs.client }}' injetado do Environment"
+          else
+            test -f "clients/${{ inputs.client }}.yml" \
+              || { echo "::error::clients/${{ inputs.client }}.yml ausente e vars.CLIENT_MANIFEST não setado"; exit 1; }
+            echo "manifesto de '${{ inputs.client }}' = arquivo commitado (sample)"
+          fi
+
+      # Tooling real: build.sh deriva a composição do manifesto e o modo do
+      # campo `delivery:` (ou do override `mode`, se informado no dispatch).
+      - name: Monta o pacote (scripts/build.sh)
+        run: |
+          if [ -n "${{ inputs.mode }}" ]; then
+            bash scripts/build.sh "${{ inputs.client }}" --mode="${{ inputs.mode }}"
+          else
+            bash scripts/build.sh "${{ inputs.client }}"
+          fi
+          test -d "dist/${{ inputs.client }}" || { echo "::error::dist/${{ inputs.client }} não gerado"; exit 1; }
+
+      # Limpa só as árvores que o build.sh regenera (análogo ao src/migrations
+      # do template-referência): evita sobra de feature removida que o SCP não
+      # poda. NÃO apaga o DEPLOY_PATH inteiro e NÃO dá down aqui — o down vai
+      # junto do up no script final; o volume do Postgres é gerido pelo Docker
+      # (fora do DEPLOY_PATH) e sobrevive ao redeploy.
+      - name: Limpa árvores regeneráveis na VPS
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_IP }}
+          username: ${{ secrets.VPS_USERNAME }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            mkdir -p "${{ vars.DEPLOY_PATH }}"
+            rm -rf "${{ vars.DEPLOY_PATH }}/frontend" "${{ vars.DEPLOY_PATH }}/backend" "${{ vars.DEPLOY_PATH }}/app.jar"
+
+      - name: Envia dist via SCP
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VPS_IP }}
+          username: ${{ secrets.VPS_USERNAME }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          source: "dist/${{ inputs.client }}/"
+          target: ${{ vars.DEPLOY_PATH }}
+          strip_components: 2
+
+      # secrets.ENV substitui o .env gerado (placeholders) — é onde
+      # DATABASE_PASSWORD/JWT_SECRET reais entram, sem ir pro git. O ENV deve
+      # ser o .env COMPLETO (modelo: o gerado por build.sh — CLIENT, PORT_*,
+      # DATABASE_NAME/USER/PASSWORD, JWT_SECRET, com valores reais).
+      # down + up no MESMO script pós-SCP (volume preservado, sem -v).
+      - name: Sobe a stack na VPS
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_IP }}
+          username: ${{ secrets.VPS_USERNAME }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            cd "${{ vars.DEPLOY_PATH }}"
+            printf '%s' "${{ secrets.ENV }}" > .env
+            docker compose down --remove-orphans
+            docker compose up -d --build
+
+      # Smoke na instância recém-subida: não re-testa código — verifica o que
+      # foi ENTREGUE. Espera o health do backend responder na porta publicada.
+      - name: Smoke (health da instância)
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_IP }}
+          username: ${{ secrets.VPS_USERNAME }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            cd "${{ vars.DEPLOY_PATH }}"
+            set -a; . ./.env; set +a
+            url="http://localhost:${PORT_BACKEND}/api/v1/health"
+            for i in $(seq 1 30); do
+              if curl -fsS "$url" >/dev/null 2>&1; then
+                echo "smoke OK: $url (tentativa $i)"
+                docker compose ps
+                exit 0
+              fi
+              sleep 4
+            done
+            echo "::error::smoke falhou: $url não respondeu"
+            docker compose ps
+            docker compose logs --tail=60 backend
+            exit 1
