@@ -1,0 +1,48 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# MANIFESTO DE CLIENTE — TEMPLATE / LEGENDA  (NÃO é um cliente real)
+#
+# O prefixo '_' faz o list-clients.sh ignorar este arquivo: ele NÃO entra na
+# descoberta, nem na matriz do CI, nem é montável pelo build.sh. Serve só de
+# referência do schema.
+#
+# Para um cliente:
+#   • SAMPLE (commitado):  copie para  clients/<slug>.yml  (sem o '_').
+#   • REAL:    NÃO commite. Injete este conteúdo na variável
+#              vars.CLIENT_MANIFEST do GitHub Environment de mesmo nome
+#              (ci.yml e _deploy-base.yml materializam clients/<slug>.yml a
+#              partir dela).
+#
+# REGRA DE OURO: o manifesto é COMPOSIÇÃO, nunca SEGREDO. Nada de banco/senha
+# /JWT aqui. Isso vem do .env (local: .env/.env.example; CD: secrets.ENV do
+# Environment, que sobrescreve o .env gerado). Por isso o manifesto pode ser
+# um 'var' (texto plano) sem vazar nada.
+# ─────────────────────────────────────────────────────────────────────────────
+
+client: cliente-exemplo            # slug = nome do arquivo e do GitHub Environment
+displayName: "Cliente Exemplo"     # rótulo exibido (frontend / READMEs gerados)
+version: 0.1.0                     # versão do pacote gerado
+
+# Modo de entrega do build.sh quando NÃO se passa --mode:
+#   binary  (default) → JAR + Next standalone (alvo só roda; recomendado)
+#   source            → código-fonte filtrado; alvo builda no `up --build`
+#   image             → só docker-compose apontando pra imagens (requer GHCR)
+# Precedência: --mode (CLI) > delivery (aqui) > binary.
+delivery: binary
+
+# Quais features o cliente contratou. 'false' / ausente = NÃO existe no
+# artefato (sem rota, sem tabela, sem código). Ajuste por cliente.
+features:
+  lembretes: true                  # política de antecedência + tela
+  categorias: true                 # CRUD de categorias + slots no calendário
+  resumo-por-categoria: true       # REQUER 'categorias' (build.sh recusa se faltar)
+  recorrencia: true                # gera eventos a partir de um modelo
+  analytics: false                 # agregações; SPI consumido pelo relatorios-pdf
+  notificacao: true                # canal de aviso (reage ao contrato do core)
+  relatorios-pdf: true             # PDF; degrada sem 'analytics' (integrates-with)
+
+# Portas publicadas no host (NÃO são segredo). Devem ser únicas por cliente
+# para rodarem lado a lado sem colisão.
+ports:
+  backend: 8190
+  frontend: 3090
+  db: 5490
