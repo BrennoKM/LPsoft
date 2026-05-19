@@ -21,7 +21,7 @@ Uma **única base de código** entrega produtos diferentes por cliente — cada 
 |---|---|
 | **Core** | A plataforma comum e **funcional por si só**: tem suas próprias funcionalidades — cadastro e login (auth JWT), CRUD de eventos, calendário — além dos contratos de evento e dos pontos de extensão (SPI). Não depende de, nem conhece, nenhuma feature opcional. |
 | **Feature** | Módulo **opcional**, contratável por cliente. Depende só do core (e, quando declarado, de outra feature). |
-| **Cliente** | Um manifesto `clients/<slug>.yml` — **fonte única**: quais features, portas, banco. "Contratar uma feature" = uma flag `true`. |
+| **Cliente** | Um manifesto `clients/<slug>.yml` — **fonte única de composição** (sem segredo): `delivery`, **lista** de `features` e `ports`. "Contratar" = adicionar o nome à lista `features` (ausência = não tem; nome fora do catálogo → build falha). Banco/JWT **não** ficam aqui — vêm do `.env`. |
 | **Montagem** | O perfil Maven (backend) e o composition root (frontend) materializam o manifesto. O que não foi contratado **não existe** no artefato daquele cliente. |
 
 Três clientes de exemplo:
@@ -258,10 +258,14 @@ sem colisão.)
 ## Empacotamento por cliente — `scripts/build.sh`
 
 ```bash
-scripts/build.sh <cliente> [--mode=binary|source|image]
+scripts/build.sh <cliente> [--mode=binary|source|image] [--explain]
 ```
 
-Lê `clients/<cliente>.yml`, **valida o grafo de dependências** (`feature-deps.yml`: `requires` faltando → erro/exit 1; `integrates-with` é informativo), corta o frontend fisicamente (com restauração via `trap`, não suja a worktree) e produz `dist/<cliente>/`.
+Lê `clients/<cliente>.yml` (`features` é **lista de nomes**; vazia/ausente = só o core), **valida**: nome de feature fora do catálogo `backend/features/` → erro/exit 1; **grafo de dependências** (`feature-deps.yml`: `requires` faltando → erro/exit 1; `integrates-with` é informativo). Corta o frontend fisicamente (restauração via `trap`, não suja a worktree) e produz `dist/<cliente>/`.
+
+`--explain` = **dry-run**: imprime o grafo resolvido do cliente (features contratadas, `requires` satisfeitos, `integrates-with` presente/ausente) e **não gera nada** — útil para enxergar "o que anda junto com o quê" sem buildar.
+
+> Modo de entrega: `--mode` (CLI) **>** campo `delivery` do manifesto **>** `binary`.
 
 | Modo | O que entrega |
 |---|---|

@@ -3,14 +3,15 @@ displayName: "LPsoft Enterprise"
 version: 0.1.0
 delivery: binary
 
+# Lista de features contratadas (todas — enterprise).
 features:
-  lembretes: true
-  categorias: true
-  resumo-por-categoria: true
-  recorrencia: true
-  analytics: true
-  notificacao: true
-  relatorios-pdf: true
+  - lembretes
+  - categorias
+  - resumo-por-categoria
+  - recorrencia
+  - analytics
+  - notificacao
+  - relatorios-pdf
 
 ports:
   backend: 8133

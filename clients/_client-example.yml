@@ -29,16 +29,27 @@ version: 0.1.0                     # versão do pacote gerado
 # Precedência: --mode (CLI) > delivery (aqui) > binary.
 delivery: binary
 
-# Quais features o cliente contratou. 'false' / ausente = NÃO existe no
-# artefato (sem rota, sem tabela, sem código). Ajuste por cliente.
+# LISTA de features contratadas (nome = pasta backend/features/<nome>/).
+# NÃO é mapa true/false. Este exemplo já vem com TODAS — o fluxo é: copie
+# este arquivo e COMENTE a linha das features que o cliente NÃO contratou
+# (linha comentada = não tem). Comentário inline `# ...` é ignorado pelo
+# parser — anote à vontade. `features: []` = nenhuma (≡ todas comentadas,
+# que é o caso do sample `lite`). Nome fora do catálogo → exit 1.
+#
+# Relações (verdade em backend/features/<f>/feature-deps.yml, NÃO aqui;
+# `scripts/build.sh <cliente> --explain` mostra o grafo resolvido):
+#   • resumo-por-categoria  REQUER  categorias  (faltar → build falha exit 1;
+#                                                 comente os dois juntos)
+#   • relatorios-pdf  INTEGRA  analytics  (opcional: sem analytics o PDF sai
+#                                          sem a seção de agregados — degrada)
 features:
-  lembretes: true                  # política de antecedência + tela
-  categorias: true                 # CRUD de categorias + slots no calendário
-  resumo-por-categoria: true       # REQUER 'categorias' (build.sh recusa se faltar)
-  recorrencia: true                # gera eventos a partir de um modelo
-  analytics: false                 # agregações; SPI consumido pelo relatorios-pdf
-  notificacao: true                # canal de aviso (reage ao contrato do core)
-  relatorios-pdf: true             # PDF; degrada sem 'analytics' (integrates-with)
+  - lembretes              # política de antecedência + tela
+  - categorias             # CRUD de categorias + slots no calendário
+  - resumo-por-categoria   # requer categorias
+  - recorrencia            # gera eventos a partir de um modelo
+  - analytics              # agregações + SPI de relatório
+  - notificacao            # canal de aviso (reage ao contrato do core)
+  - relatorios-pdf         # integra analytics (degrada sem ela)
 
 # Portas publicadas no host (NÃO são segredo). Devem ser únicas por cliente
 # para rodarem lado a lado sem colisão.

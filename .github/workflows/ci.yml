@@ -229,8 +229,7 @@ jobs:
           displayName: "CI Invalid"
           version: 0.1.0
           features:
-            categorias: false
-            resumo-por-categoria: true
+            - resumo-por-categoria
           ports: {backend: 8199, frontend: 3099, db: 5499}
           EOF
           set +e

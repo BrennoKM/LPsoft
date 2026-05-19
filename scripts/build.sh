@@ -27,12 +27,14 @@ die() { echo "ERRO: $*" >&2; exit 1; }
 info() { echo ">> $*"; }
 
 # ── Argumentos ────────────────────────────────────────────────────────────
-[ $# -ge 1 ] || die "uso: scripts/build.sh <cliente> [--mode=binary|source|image]"
+[ $# -ge 1 ] || die "uso: scripts/build.sh <cliente> [--mode=binary|source|image] [--explain]"
 CLIENT="$1"; shift
 MODE_ARG=""   # --mode= explícito tem prioridade; vazio = decidir pelo manifesto
+EXPLAIN=0     # --explain = dry-run: imprime o grafo resolvido e NÃO gera nada
 for arg in "$@"; do
   case "$arg" in
     --mode=*) MODE_ARG="${arg#--mode=}" ;;
+    --explain) EXPLAIN=1 ;;
     *) die "argumento desconhecido: $arg" ;;
   esac
 done
@@ -60,7 +62,20 @@ section_val() {
     ins && $1 == key":" { print $2; exit }
   ' "$MANIFEST"
 }
-feature_enabled() { section_val "features" "$1"; }
+# features: é LISTA de nomes (não mapa true/false). Ausência = não
+# contratada. Mesmo parser de listas do deps_of (aceita também `features: []`).
+manifest_list() {  # <secao> -> um item por linha
+  awk -v sec="$1" '
+    $0 ~ "^"sec":" { ins=1; if ($0 ~ /\[\]/) ins=0; next }
+    ins && /^[^[:space:][]/ { ins=0 }
+    ins && /^[[:space:]]*-[[:space:]]*/ {
+      gsub(/^[[:space:]]*-[[:space:]]*/, "")
+      sub(/[[:space:]]*#.*/, "")          # corta comentário inline (- x  # nota)
+      gsub(/[[:space:]]+$/, "")
+      if (length) print
+    }
+  ' "$MANIFEST"
+}
 
 DISPLAY_NAME="$(manifest_scalar displayName)"
 VERSION="$(manifest_scalar version)"
@@ -82,13 +97,28 @@ DATABASE_USER="$(env_value DATABASE_USER)";         DATABASE_USER="${DATABASE_US
 DATABASE_PASSWORD="$(env_value DATABASE_PASSWORD)"; DATABASE_PASSWORD="${DATABASE_PASSWORD:-lpsoft}"
 JWT_SECRET="$(env_value JWT_SECRET)";               JWT_SECRET="${JWT_SECRET:-change-me-in-production-use-openssl-rand}"
 
-# Catálogo completo (diretórios de feature no backend)
+# Catálogo completo (diretórios de feature no backend) = fonte da verdade
 ALL_FEATURES=()
 for d in "$ROOT"/backend/features/*/; do ALL_FEATURES+=("$(basename "$d")"); done
 
+# O que o cliente contratou (lista de nomes crua, do manifesto)
+CONTRACTED=()
+while IFS= read -r f; do [ -n "$f" ] && CONTRACTED+=("$f"); done < <(manifest_list features)
+
+# Nome contratado que não existe no catálogo → ERRO (fail-loud; pega typo,
+# ex.: 'lembrete' em vez de 'lembretes' — antes sumia calado).
+for f in ${CONTRACTED[@]+"${CONTRACTED[@]}"}; do
+  _ok=0
+  for a in "${ALL_FEATURES[@]}"; do [ "$a" = "$f" ] && _ok=1 && break; done
+  [ "$_ok" = 1 ] || die "feature '$f' contratada não existe no catálogo (backend/features/)"
+done
+
+# ENABLED na ordem do catálogo (determinístico p/ POM/JSON), só contratadas
 ENABLED=()
-for f in "${ALL_FEATURES[@]}"; do
-  [ "$(feature_enabled "$f")" = "true" ] && ENABLED+=("$f")
+for a in "${ALL_FEATURES[@]}"; do
+  for f in ${CONTRACTED[@]+"${CONTRACTED[@]}"}; do
+    [ "$a" = "$f" ] && ENABLED+=("$a") && break
+  done
 done
 
 # Iteração segura: array vazia → ZERO iterações (sob `set -u`,
@@ -123,32 +153,75 @@ deps_of() { # <feature> <requires|integrates-with>
     }
     ins && /^[^[:space:][]/ { ins=0 }
     ins && /^[[:space:]]*-[[:space:]]*/ {
-      gsub(/^[[:space:]]*-[[:space:]]*/, ""); gsub(/[[:space:]]+$/, "")
-      print
+      gsub(/^[[:space:]]*-[[:space:]]*/, "")
+      sub(/[[:space:]]*#.*/, "")          # corta comentário inline
+      gsub(/[[:space:]]+$/, "")
+      if (length) print
     }
   ' "$file"
 }
 
-info "Validando dependências de '$CLIENT' (features: ${ENABLED[*]:-nenhuma})"
+# Valida o grafo UMA vez e guarda as linhas já formatadas/alinhadas, pra
+# render ser idêntico no build normal e no --explain (sem print duplicado).
+#   requer  → obrigatória: faltar = build falha (exit 1)
+#   integra → opcional: faltar só degrada (não falha)
+# Cada relação vira um BLOCO de 2 linhas: o vínculo + a consequência em
+# português claro (não um adjetivo solto). Mesmo render no build e no --explain.
 GRAPH_OK=1
+DEP_ROWS=()
 while IFS= read -r f; do
   [ -n "$f" ] || continue
   for req in $(deps_of "$f" requires); do
-    if ! is_enabled "$req"; then
-      echo "  ✗ feature '$f' requer '$req', que não está contratada" >&2
+    if is_enabled "$req"; then
+      DEP_ROWS+=("$(printf '  [%s]  PRECISA DE  [%s]\n      [%s] contratada? SIM  →  [%s] compila; build ok' "$f" "$req" "$req" "$f")")
+    else
+      DEP_ROWS+=("$(printf '  [%s]  PRECISA DE  [%s]\n      [%s] contratada? NÃO  →  ✗ [%s] não compila — BUILD FALHA (exit 1)' "$f" "$req" "$req" "$f")")
       GRAPH_OK=0
     fi
   done
   for opt in $(deps_of "$f" integrates-with); do
     if is_enabled "$opt"; then
-      echo "  · '$f' integra '$opt' (presente)"
+      DEP_ROWS+=("$(printf '  [%s]  INTEGRA (opcional)  [%s]\n      [%s] contratada? SIM  →  [%s] ativa a parte que usa [%s]' "$f" "$opt" "$opt" "$f" "$opt")")
     else
-      echo "  · '$f' integra '$opt' (ausente — degrada graciosamente)"
+      DEP_ROWS+=("$(printf '  [%s]  INTEGRA (opcional)  [%s]\n      [%s] contratada? NÃO  →  [%s] builda e roda SEM a parte que usa [%s]' "$f" "$opt" "$opt" "$f" "$opt")")
     fi
   done
 done < <(enabled_each)
-[ "$GRAPH_OK" = "1" ] || die "grafo de dependências inválido para '$CLIENT'"
-info "Grafo OK"
+
+print_deps() {
+  if [ ${#DEP_ROWS[@]} -eq 0 ]; then
+    echo "  — nenhuma relação entre as features contratadas —"
+  else
+    local r
+    for r in "${DEP_ROWS[@]}"; do printf '%s\n\n' "$r"; done
+  fi
+}
+
+if [ "$GRAPH_OK" != 1 ]; then
+  {
+    echo "Grafo de dependências INVÁLIDO — cliente '$CLIENT':"
+    print_deps
+  } >&2
+  die "feature contratada sem a dependência obrigatória (linha ✗ acima)"
+fi
+
+if [ "$EXPLAIN" = 1 ]; then
+  echo
+  echo "═══ Plano: $CLIENT   (--explain · dry-run, nada foi gerado) ═══"
+  echo "Entrega : $MODE"
+  if [ ${#ENABLED[@]} -eq 0 ]; then
+    echo "Features: nenhuma (só o core)"
+  else
+    echo "Features: ${#ENABLED[@]}"
+    for f in "${ENABLED[@]}"; do echo "  ✓ $f"; done
+  fi
+  echo "Dependências entre features:"
+  print_deps
+  exit 0
+fi
+
+info "Grafo OK — ${#ENABLED[@]} feature(s)"
+print_deps
 
 # ── Saída ─────────────────────────────────────────────────────────────────
 OUT="$ROOT/dist/$CLIENT"
