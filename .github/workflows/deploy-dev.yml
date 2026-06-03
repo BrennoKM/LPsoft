@@ -1,0 +1,75 @@
+name: Deploy Dev
+
+# CD de homologação (branch dev). Mesmo desenho do deploy.yml: o GATE é o
+# ci.yml (PR-only); este workflow NÃO re-testa. push:dev → auto-deploy da
+# lista AUTO_DEPLOY (vazia por ora — defina os <slug>-dev quando quiser);
+# workflow_dispatch → CSV avulso. Smoke pós-deploy no _deploy-base.
+
+on:
+  workflow_dispatch:
+    inputs:
+      clientes:
+        description: "Slugs dev separados por vírgula (ex.: enterprise-dev)"
+        required: true
+        type: string
+      ref:
+        description: "Branch, tag ou SHA (padrão: dev)"
+        required: false
+        default: dev
+        type: string
+      mode:
+        description: "Override de modo (binary|source|image; vazio = delivery do manifesto)"
+        required: false
+        default: ""
+        type: string
+  push:
+    branches: [dev]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-dev-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  resolve-matrix:
+    name: Resolve · clientes dev a entregar
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set.outputs.matrix }}
+    steps:
+      - id: set
+        env:
+          DISPATCH_CLIENTES: ${{ inputs.clientes }}
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "$DISPATCH_CLIENTES" ]; then
+            json="$(printf '%s' "$DISPATCH_CLIENTES" | tr ',' '\n' \
+              | sed 's/[[:space:]]//g; s/"//g; /^$/d' \
+              | awk 'BEGIN{printf "["} {printf "%s\"%s\"", (NR>1?",":""), $0} END{print "]"}')"
+          else
+            # push:dev — AUTO-DEPLOY. Vazio por padrão (o if pula o deploy);
+            # adicione aqui os slugs dev que sobem sozinhos, ex.:
+            #   AUTO_DEPLOY='["enterprise-dev"]'
+            AUTO_DEPLOY='[]'
+            json="$AUTO_DEPLOY"
+          fi
+          echo "Matriz: $json"
+          echo "matrix=$json" >> "$GITHUB_OUTPUT"
+
+  deploy:
+    name: Deploy (dev)
+    needs: resolve-matrix
+    # Matriz vazia ([]) faz o strategy ERRAR; o if pula o job antes disso
+    # (push sem auto-deploy = deploy skipped, workflow verde).
+    if: ${{ needs.resolve-matrix.outputs.matrix != '[]' && needs.resolve-matrix.outputs.matrix != '' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        client: ${{ fromJSON(needs.resolve-matrix.outputs.matrix) }}
+    uses: ./.github/workflows/_deploy-base.yml
+    with:
+      client: ${{ matrix.client }}
+      ref: ${{ inputs.ref || 'dev' }}
+      mode: ${{ inputs.mode || '' }}
+    secrets: inherit

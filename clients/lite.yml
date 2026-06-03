@@ -1,22 +1,13 @@
 client: lite
 displayName: "LPsoft Lite"
 version: 0.1.0
+delivery: binary
 
-features:
-  lembretes: false
-  categorias: false
-  resumo-por-categoria: false
-  recorrencia: false
-  analytics: false
-  notificacao: false
-  relatorios-pdf: false
+# features: LISTA de nomes contratados (mesma do _client-example.yml).
+# lite = nenhuma → `[]` (equivale a copiar o exemplo e comentar TODAS).
+features: []
 
 ports:
   backend: 8132
   frontend: 3052
   db: 5484
-
-db:
-  database: lpsoft_lite
-  user: lpsoft
-  password: lpsoft

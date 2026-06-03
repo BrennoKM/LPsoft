@@ -1,0 +1,80 @@
+name: Deploy
+
+# CD de produção. O GATE de teste é o ci.yml, que roda SÓ em pull_request
+# (antes do merge). Este workflow NÃO re-testa — confia no CI do PR e entrega.
+# A rede de segurança de runtime é o smoke pós-deploy (step do _deploy-base).
+#
+# Trade-off assumido (sem branch protection): push DIRETO na main não passa
+# por CI (CI é PR-only) e dispara este deploy assim mesmo. Decisão do dono.
+#
+# Gatilhos: push:main → auto-deploy de lite+enterprise; workflow_dispatch →
+# CSV avulso de clientes. Reusa _deploy-base.yml (agnóstico, Java/Next).
+
+on:
+  workflow_dispatch:
+    inputs:
+      clientes:
+        description: "Slugs separados por vírgula (ex.: enterprise, cliente-x)"
+        required: true
+        type: string
+      ref:
+        description: "Branch, tag ou SHA (padrão: main)"
+        required: false
+        default: main
+        type: string
+      mode:
+        description: "Override de modo (binary|source|image; vazio = delivery do manifesto)"
+        required: false
+        default: ""
+        type: string
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  resolve-matrix:
+    name: Resolve · clientes a entregar
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set.outputs.matrix }}
+    steps:
+      - id: set
+        env:
+          DISPATCH_CLIENTES: ${{ inputs.clientes }}
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "$DISPATCH_CLIENTES" ]; then
+            # Subconjunto avulso: CSV → array JSON (mesmo padrão do ci.yml)
+            json="$(printf '%s' "$DISPATCH_CLIENTES" | tr ',' '\n' \
+              | sed 's/[[:space:]]//g; s/"//g; /^$/d' \
+              | awk 'BEGIN{printf "["} {printf "%s\"%s\"", (NR>1?",":""), $0} END{print "]"}')"
+          else
+            # push:main — clientes com AUTO-DEPLOY. Edite a lista para
+            # adicionar/remover slugs que sobem sozinhos no merge.
+            AUTO_DEPLOY='["lite","enterprise"]'
+            json="$AUTO_DEPLOY"
+          fi
+          echo "Matriz: $json"
+          echo "matrix=$json" >> "$GITHUB_OUTPUT"
+
+  deploy:
+    name: Deploy
+    needs: resolve-matrix
+    # Matriz vazia ([]) faz o strategy ERRAR ("Matrix vector does not contain
+    # any values"). O if pula o job ANTES de avaliar a matriz.
+    if: ${{ needs.resolve-matrix.outputs.matrix != '[]' && needs.resolve-matrix.outputs.matrix != '' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        client: ${{ fromJSON(needs.resolve-matrix.outputs.matrix) }}
+    uses: ./.github/workflows/_deploy-base.yml
+    with:
+      client: ${{ matrix.client }}
+      ref: ${{ inputs.ref || 'main' }}
+      mode: ${{ inputs.mode || '' }}
+    secrets: inherit

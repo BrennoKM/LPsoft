@@ -1,22 +1,19 @@
 client: plus
 displayName: "LPsoft Plus"
 version: 0.1.0
+delivery: binary
 
+# Lista de features contratadas (tudo menos analytics; relatorios-pdf
+# degrada sem analytics — integrates-with, ver feature-deps.yml).
 features:
-  lembretes: true
-  categorias: true
-  resumo-por-categoria: true
-  recorrencia: true
-  analytics: false
-  notificacao: true
-  relatorios-pdf: true
+  - lembretes
+  - categorias
+  - resumo-por-categoria
+  - recorrencia
+  - notificacao
+  - relatorios-pdf
 
 ports:
   backend: 8134
   frontend: 3054
   db: 5486
-
-db:
-  database: lpsoft_plus
-  user: lpsoft
-  password: lpsoft

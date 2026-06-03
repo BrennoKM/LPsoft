@@ -1,0 +1,59 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# MANIFESTO DE CLIENTE — TEMPLATE / LEGENDA  (NÃO é um cliente real)
+#
+# O prefixo '_' faz o list-clients.sh ignorar este arquivo: ele NÃO entra na
+# descoberta, nem na matriz do CI, nem é montável pelo build.sh. Serve só de
+# referência do schema.
+#
+# Para um cliente:
+#   • SAMPLE (commitado):  copie para  clients/<slug>.yml  (sem o '_').
+#   • REAL:    NÃO commite. Injete este conteúdo na variável
+#              vars.CLIENT_MANIFEST do GitHub Environment de mesmo nome
+#              (ci.yml e _deploy-base.yml materializam clients/<slug>.yml a
+#              partir dela).
+#
+# REGRA DE OURO: o manifesto é COMPOSIÇÃO, nunca SEGREDO. Nada de banco/senha
+# /JWT aqui. Isso vem do .env (local: .env/.env.example; CD: secrets.ENV do
+# Environment, que sobrescreve o .env gerado). Por isso o manifesto pode ser
+# um 'var' (texto plano) sem vazar nada.
+# ─────────────────────────────────────────────────────────────────────────────
+
+client: cliente-exemplo            # slug = nome do arquivo e do GitHub Environment
+displayName: "Cliente Exemplo"     # rótulo exibido (frontend / READMEs gerados)
+version: 0.1.0                     # versão do pacote gerado
+
+# Modo de entrega do build.sh quando NÃO se passa --mode:
+#   binary  (default) → JAR + Next standalone (alvo só roda; recomendado)
+#   source            → código-fonte filtrado; alvo builda no `up --build`
+#   image             → só docker-compose apontando pra imagens (requer GHCR)
+# Precedência: --mode (CLI) > delivery (aqui) > binary.
+delivery: binary
+
+# LISTA de features contratadas (nome = pasta backend/features/<nome>/).
+# NÃO é mapa true/false. Este exemplo já vem com TODAS — o fluxo é: copie
+# este arquivo e COMENTE a linha das features que o cliente NÃO contratou
+# (linha comentada = não tem). Comentário inline `# ...` é ignorado pelo
+# parser — anote à vontade. `features: []` = nenhuma (≡ todas comentadas,
+# que é o caso do sample `lite`). Nome fora do catálogo → exit 1.
+#
+# Relações (verdade em backend/features/<f>/feature-deps.yml, NÃO aqui;
+# `scripts/build.sh <cliente> --explain` mostra o grafo resolvido):
+#   • resumo-por-categoria  REQUER  categorias  (faltar → build falha exit 1;
+#                                                 comente os dois juntos)
+#   • relatorios-pdf  INTEGRA  analytics  (opcional: sem analytics o PDF sai
+#                                          sem a seção de agregados — degrada)
+features:
+  - lembretes              # política de antecedência + tela
+  - categorias             # CRUD de categorias + slots no calendário
+  - resumo-por-categoria   # requer categorias
+  - recorrencia            # gera eventos a partir de um modelo
+  - analytics              # agregações + SPI de relatório
+  - notificacao            # canal de aviso (reage ao contrato do core)
+  - relatorios-pdf         # integra analytics (degrada sem ela)
+
+# Portas publicadas no host (NÃO são segredo). Devem ser únicas por cliente
+# para rodarem lado a lado sem colisão.
+ports:
+  backend: 8190
+  frontend: 3090
+  db: 5490
