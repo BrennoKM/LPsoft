@@ -77,7 +77,11 @@ jobs:
 
       # Tooling real: build.sh deriva a composição do manifesto e o modo do
       # campo `delivery:` (ou do override `mode`, se informado no dispatch).
+      # API_HOST=secrets.VPS_IP entra no NEXT_PUBLIC_API_URL cravado no
+      # bundle do frontend, pra browser bater no IP da VPS (não localhost).
       - name: Monta o pacote (scripts/build.sh)
+        env:
+          API_HOST: ${{ secrets.VPS_IP }}
         run: |
           if [ -n "${{ inputs.mode }}" ]; then
             bash scripts/build.sh "${{ inputs.client }}" --mode="${{ inputs.mode }}"

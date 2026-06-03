@@ -94,6 +94,15 @@ DATABASE_NAME="$(env_value DATABASE_NAME)";         DATABASE_NAME="${DATABASE_NA
 DATABASE_USER="$(env_value DATABASE_USER)";         DATABASE_USER="${DATABASE_USER:-lpsoft}"
 DATABASE_PASSWORD="$(env_value DATABASE_PASSWORD)"; DATABASE_PASSWORD="${DATABASE_PASSWORD:-lpsoft}"
 
+# Endereço que o browser do usuário vai usar pra falar com o backend.
+# Cravado no bundle JS do frontend em build time (NEXT_PUBLIC_API_URL).
+# Default = localhost (bom pra rodar tudo na mesma máquina em dev).
+# No CD, o workflow passa API_HOST=secrets.VPS_IP pra ficar acessível
+# de qualquer browser na internet via IP da VPS.
+# /api/v1 no final: backend do LPsoft tem context path /api/v1.
+API_HOST="${API_HOST:-localhost}"
+API_URL="http://$API_HOST:$PORT_BE/api/v1"
+
 # Catálogo completo (diretórios de feature no backend) = fonte da verdade
 ALL_FEATURES=()
 for d in "$ROOT"/backend/features/*/; do ALL_FEATURES+=("$(basename "$d")"); done
@@ -285,7 +294,7 @@ gen_compose() { # <mode>
       fe_svc+=$'        CLIENT: '"$CLIENT"$'\n'
       fe_svc+=$'        DISPLAY_NAME: "'"$DISPLAY_NAME"$'"\n'
       fe_svc+=$'        NEXT_PUBLIC_FEATURES: \''"$FEATURES_JSON"$'\'\n'
-      fe_svc+=$'        NEXT_PUBLIC_API_URL: http://localhost:'"$PORT_BE"'/api/v1'
+      fe_svc+=$'        NEXT_PUBLIC_API_URL: '"$API_URL"
       ;;
     image)
       be_svc="    image: ghcr.io/$GHCR_OWNER/lpsoft-backend:$VERSION-$CLIENT"
@@ -330,7 +339,7 @@ $be_svc
       - DATABASE_USER=$DATABASE_USER
       - DATABASE_PASSWORD=$DATABASE_PASSWORD
       - SERVER_PORT=8080
-      - CORS_ALLOWED_ORIGINS=http://localhost:$PORT_FE
+      - CORS_ALLOWED_ORIGINS=http://$API_HOST:$PORT_FE
     depends_on:
       db:
         condition: service_healthy
@@ -341,7 +350,7 @@ $be_svc
 $fe_svc
     container_name: lpsoft-frontend-$CLIENT
     # NEXT_PUBLIC_API_URL foi fixado no build (build-arg do Dockerfile,
-    # apontando para http://localhost:$PORT_BE/api/v1).
+    # apontando para $API_URL).
     environment:
       - PORT=3000
       - HOSTNAME=0.0.0.0
@@ -535,9 +544,8 @@ build_binary() {
   rm -rf "$bdir"
 
   cut_frontend
-  local api_url="http://localhost:${PORT_BE}/api/v1"
-  info "Frontend: CLIENT=$CLIENT NEXT_PUBLIC_API_URL=$api_url npm run build"
-  ( cd "$ROOT/frontend" && CLIENT="$CLIENT" NEXT_PUBLIC_API_URL="$api_url" npm run build >/dev/null )
+  info "Frontend: CLIENT=$CLIENT NEXT_PUBLIC_API_URL=$API_URL npm run build"
+  ( cd "$ROOT/frontend" && CLIENT="$CLIENT" NEXT_PUBLIC_API_URL="$API_URL" npm run build >/dev/null )
   mkdir -p "$OUT/frontend"
   cp -a "$ROOT/frontend/.next/standalone/." "$OUT/frontend/"
   mkdir -p "$OUT/frontend/.next"
