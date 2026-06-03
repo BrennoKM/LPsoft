@@ -111,10 +111,12 @@ jobs:
           target: ${{ vars.DEPLOY_PATH }}
           strip_components: 2
 
-      # secrets.ENV substitui o .env gerado (placeholders) — é onde
-      # DATABASE_PASSWORD/JWT_SECRET reais entram, sem ir pro git. O ENV deve
-      # ser o .env COMPLETO (modelo: o gerado por build.sh — CLIENT, PORT_*,
-      # DATABASE_NAME/USER/PASSWORD, JWT_SECRET, com valores reais).
+      # secrets.ENV vira o .env que o backend carrega via env_file: .env.
+      # Escopo mínimo: só as variáveis genuinamente sensíveis da APP
+      # (hoje só JWT_SECRET). Portas e creds do banco interno estão
+      # hardcoded no compose pelo build.sh — não precisam ir pro secret.
+      # Modelo do conteúdo do secrets.ENV:
+      #   JWT_SECRET=<gerar com openssl rand -base64 48>
       # down + up no MESMO script pós-SCP (volume preservado, sem -v).
       - name: Sobe a stack na VPS
         uses: appleboy/ssh-action@v1.0.3

@@ -82,20 +82,17 @@ VERSION="$(manifest_scalar version)"
 PORT_BE="$(section_val ports backend)"
 PORT_FE="$(section_val ports frontend)"
 PORT_DB="$(section_val ports db)"
-# Banco/segredo NÃO vêm do manifesto (manifesto = composição, sem segredo).
-# Vêm do .env: .env da raiz (gitignored, override local do dev) se existir,
-# senão .env.example (contrato commitado, placeholders). No CD o secrets.ENV
-# do Environment sobrescreve o .env inteiro — o cliente controla por lá.
+# Creds do banco INTERNO da stack docker são hardcoded no compose pelo build.sh
+# (não são segredo: o postgres só é acessível pela rede docker da stack). Vêm
+# do .env da raiz (gitignored) se existir, senão .env.example (contrato
+# commitado). JWT_SECRET, em contraste, é genuinamente sensível: o build.sh
+# NÃO o coloca no compose — ele é carregado em runtime via env_file: .env,
+# vindo de secrets.ENV no CD ou ausente (fallback do app) em dev local.
 ENV_SRC="$ROOT/.env"; [ -f "$ENV_SRC" ] || ENV_SRC="$ROOT/.env.example"
-env_value() { grep -E "^$1=" "$ENV_SRC" 2>/dev/null | tail -1 | sed -E "s/^$1=//"; }
-# Banco e segredo vêm do .env (não do manifesto — manifesto = composição):
-# .env da raiz (gitignored, override local do dev) se existir, senão
-# .env.example (contrato commitado). No CD o secrets.ENV do Environment
-# sobrescreve o .env inteiro. Nomes alinhados ao que o Spring lê (DATABASE_*).
+env_value() { grep -E "^$1=" "$ENV_SRC" 2>/dev/null | tail -1 | sed -E "s/^$1=//" || true; }
 DATABASE_NAME="$(env_value DATABASE_NAME)";         DATABASE_NAME="${DATABASE_NAME:-lpsoft}"
 DATABASE_USER="$(env_value DATABASE_USER)";         DATABASE_USER="${DATABASE_USER:-lpsoft}"
 DATABASE_PASSWORD="$(env_value DATABASE_PASSWORD)"; DATABASE_PASSWORD="${DATABASE_PASSWORD:-lpsoft}"
-JWT_SECRET="$(env_value JWT_SECRET)";               JWT_SECRET="${JWT_SECRET:-change-me-in-production-use-openssl-rand}"
 
 # Catálogo completo (diretórios de feature no backend) = fonte da verdade
 ALL_FEATURES=()
@@ -261,19 +258,17 @@ cut_frontend() {
 }
 
 # ── compose / env / readme ────────────────────────────────────────────────
-gen_env() {
-  cat > "$OUT/.env" <<EOF
-# Gerado por build.sh — cliente $CLIENT
-CLIENT=$CLIENT
-DISPLAY_NAME=$DISPLAY_NAME
-VERSION=$VERSION
-PORT_BACKEND=$PORT_BE
-PORT_FRONTEND=$PORT_FE
-PORT_DB=$PORT_DB
-DATABASE_NAME=$DATABASE_NAME
-DATABASE_USER=$DATABASE_USER
-DATABASE_PASSWORD=$DATABASE_PASSWORD
-JWT_SECRET=$JWT_SECRET
+# .env.example é template: lista apenas as variáveis que o compose espera
+# carregar via env_file no runtime (hoje só JWT_SECRET). Portas, creds do
+# banco interno, CLIENT/DISPLAY_NAME/VERSION estão hardcoded no compose
+# (vindos do manifesto via build.sh).
+# Cliente real preenche os valores; no CD, secrets.ENV do GitHub Environment
+# vira o .env final na VPS (apenas com os campos sensíveis).
+gen_env_example() {
+  cat > "$OUT/.env.example" <<EOF
+# Variáveis carregadas pelo backend via env_file: .env (compose).
+# Em produção, defina no GitHub Environment como secrets.ENV.
+JWT_SECRET=
 EOF
 }
 
@@ -300,6 +295,10 @@ gen_compose() { # <mode>
 
   cat > "$OUT/docker-compose.yml" <<EOF
 # Gerado por build.sh ($mode) — cliente $CLIENT ($DISPLAY_NAME)
+# Portas, nomes e creds do banco interno são interpolados aqui pelo build.sh
+# (literais no yml). O único \${VAR} que sobra é JWT_SECRET, carregado via
+# env_file: .env, que vem do secrets.ENV do GitHub Environment no CD (no
+# dev local, .env não existe e o backend cai no fallback do application.properties).
 name: lpsoft-$CLIENT
 
 services:
@@ -307,13 +306,13 @@ services:
     image: postgres:16-alpine
     container_name: lpsoft-db-$CLIENT
     environment:
-      POSTGRES_DB: \${DATABASE_NAME}
-      POSTGRES_USER: \${DATABASE_USER}
-      POSTGRES_PASSWORD: \${DATABASE_PASSWORD}
+      POSTGRES_DB: $DATABASE_NAME
+      POSTGRES_USER: $DATABASE_USER
+      POSTGRES_PASSWORD: $DATABASE_PASSWORD
     ports:
-      - "\${PORT_DB}:5432"
+      - "$PORT_DB:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U \${DATABASE_USER} -d \${DATABASE_NAME}"]
+      test: ["CMD-SHELL", "pg_isready -U $DATABASE_USER -d $DATABASE_NAME"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -323,31 +322,33 @@ services:
   backend:
 $be_svc
     container_name: lpsoft-backend-$CLIENT
+    env_file:
+      - path: .env
+        required: false
     environment:
-      - DATABASE_URL=jdbc:postgresql://db:5432/\${DATABASE_NAME}
-      - DATABASE_USER=\${DATABASE_USER}
-      - DATABASE_PASSWORD=\${DATABASE_PASSWORD}
+      - DATABASE_URL=jdbc:postgresql://db:5432/$DATABASE_NAME
+      - DATABASE_USER=$DATABASE_USER
+      - DATABASE_PASSWORD=$DATABASE_PASSWORD
       - SERVER_PORT=8080
-      - JWT_SECRET=\${JWT_SECRET}
-      - CORS_ALLOWED_ORIGINS=http://localhost:\${PORT_FRONTEND}
+      - CORS_ALLOWED_ORIGINS=http://localhost:$PORT_FE
     depends_on:
       db:
         condition: service_healthy
     ports:
-      - "\${PORT_BACKEND}:8080"
+      - "$PORT_BE:8080"
 
   frontend:
 $fe_svc
     container_name: lpsoft-frontend-$CLIENT
-    # NEXT_PUBLIC_API_URL é fixado no build (não em runtime): apontado para
-    # http://localhost:\${PORT_BACKEND}/api/v1 ao gerar este pacote.
+    # NEXT_PUBLIC_API_URL foi fixado no build (build-arg do Dockerfile,
+    # apontando para http://localhost:$PORT_BE/api/v1).
     environment:
       - PORT=3000
       - HOSTNAME=0.0.0.0
     depends_on:
       - backend
     ports:
-      - "\${PORT_FRONTEND}:3000"
+      - "$PORT_FE:3000"
 
 volumes:
   db-data:
@@ -545,7 +546,7 @@ build_binary() {
   restore_frontend
   trap - EXIT
 
-  gen_env
+  gen_env_example
   gen_compose binary
   gen_readme binary
 }
@@ -561,7 +562,7 @@ build_source() {
   restore_frontend
   trap - EXIT
 
-  gen_env
+  gen_env_example
   gen_compose source
   gen_readme source
 }
@@ -569,7 +570,7 @@ build_source() {
 # ── Modo: image ───────────────────────────────────────────────────────────
 build_image() {
   info "Modo image: gerando apenas compose (imagens em ghcr.io/$GHCR_OWNER)"
-  gen_env
+  gen_env_example
   gen_compose image
   gen_readme image
 }
